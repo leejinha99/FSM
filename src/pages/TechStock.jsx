@@ -118,7 +118,7 @@ function StockMoveModal({ myWarehouseId, allParts, warehouses, onSave, onClose }
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-gray-800">재고 이동 등록</h2>
+          <h2 className="text-base font-bold text-gray-800">재고 등록</h2>
           <CloseBtn onClick={onClose} />
         </div>
 

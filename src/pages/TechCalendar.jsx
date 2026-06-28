@@ -758,30 +758,38 @@ export default function TechCalendar() {
               <button onClick={() => navigate('/as')} className="text-xs text-blue-600">전체 보기</button>
             </div>
             <div className="flex gap-2">
-              <ASummaryCard
-                label="접수"
-                value={asTickets.filter(a => a.status === '접수').length}
-                bgColor="bg-yellow-50"
-                textColor="text-yellow-700"
-                borderColor="border-yellow-100"
-                onClick={() => navigate('/as')}
-              />
-              <ASummaryCard
-                label="처리중"
-                value={asTickets.filter(a => a.status === '처리중').length}
-                bgColor="bg-orange-50"
-                textColor="text-orange-600"
-                borderColor="border-orange-100"
-                onClick={() => navigate('/as')}
-              />
-              <ASummaryCard
-                label="완료"
-                value={asTickets.filter(a => a.status === '완료').length}
-                bgColor="bg-green-50"
-                textColor="text-green-700"
-                borderColor="border-green-100"
-                onClick={() => navigate('/as')}
-              />
+              {(() => {
+                const monthPrefix = currentDate.format('YYYY-MM')
+                const monthly = asTickets.filter(a => a.reportedDate.startsWith(monthPrefix))
+                return (
+                  <>
+                    <ASummaryCard
+                      label="접수"
+                      value={monthly.filter(a => a.status === '접수').length}
+                      bgColor="bg-yellow-50"
+                      textColor="text-yellow-700"
+                      borderColor="border-yellow-100"
+                      onClick={() => navigate('/as')}
+                    />
+                    <ASummaryCard
+                      label="처리중"
+                      value={monthly.filter(a => a.status === '처리중').length}
+                      bgColor="bg-orange-50"
+                      textColor="text-orange-600"
+                      borderColor="border-orange-100"
+                      onClick={() => navigate('/as')}
+                    />
+                    <ASummaryCard
+                      label="완료"
+                      value={monthly.filter(a => a.status === '완료').length}
+                      bgColor="bg-green-50"
+                      textColor="text-green-700"
+                      borderColor="border-green-100"
+                      onClick={() => navigate('/as')}
+                    />
+                  </>
+                )
+              })()}
             </div>
           </div>
 

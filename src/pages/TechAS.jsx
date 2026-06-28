@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import dayjs from 'dayjs'
 import { api } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useNotification, getSeenAsIds, markAsIdsSeen } from '../context/NotificationContext.jsx'
+import { useNotification } from '../context/NotificationContext.jsx'
 
 const STATUS_TABS = ['전체', '접수', '처리중', '수리완료', '발행대기', '완료']
 
@@ -657,8 +657,7 @@ export default function TechAS() {
     try {
       const data = await api.getMyAS(user.techId)
       setTickets(data)
-      const seen = getSeenAsIds(user.techId)
-      const unread = data.filter(a => !seen.has(a.asId)).length
+      const unread = data.filter(a => a.status === '접수').length
       setAsUnread(unread)
     } catch (e) {
       console.error(e)
@@ -671,11 +670,6 @@ export default function TechAS() {
 
   function handleOpen(ticket) {
     setSelected(ticket)
-    markAsIdsSeen(user.techId, [ticket.asId])
-    setAsUnread(() => {
-      const seen = getSeenAsIds(user.techId)
-      return tickets.filter(a => !seen.has(a.asId)).length
-    })
   }
 
   const filtered = useMemo(() => {
@@ -702,8 +696,6 @@ export default function TechAS() {
     STATUS_TABS.slice(1).forEach(s => { c[s] = tickets.filter(a => a.status === s).length })
     return c
   }, [tickets])
-
-  const seenIds = getSeenAsIds(user.techId)
 
   const years = []
   for (let y = 2024; y <= 2030; y++) years.push(String(y))
@@ -786,7 +778,7 @@ export default function TechAS() {
               <p className="text-sm">배정된 AS 접수 건이 없습니다</p>
             </div>
           ) : filtered.map(a => {
-            const isUnread = !seenIds.has(a.asId)
+            const isUnread = a.status === '접수'
             return (
               <button
                 key={a.asId}

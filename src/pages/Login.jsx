@@ -108,14 +108,7 @@ export default function Login() {
         </form>
       </div>
 
-      {isMockMode && (
-        <div className="mt-4 bg-yellow-500/20 border border-yellow-400/30 rounded-xl px-4 py-3 w-full max-w-sm">
-          <p className="text-yellow-100 text-xs font-medium mb-1">목(Mock) 데이터 모드</p>
-          <p className="text-yellow-200 text-xs">기사: kim01 / 1234 &nbsp;|&nbsp; 관리자: admin / admin1234</p>
-        </div>
-      )}
-
-      <p className="text-blue-300 text-xs mt-8">© 2026 웰라수. All rights reserved.</p>
+<p className="text-blue-300 text-xs mt-8">© 2026 웰라수. All rights reserved.</p>
     </div>
   )
 }

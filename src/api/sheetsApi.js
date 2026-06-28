@@ -80,10 +80,10 @@ const MOCK = {
     { techId: 'ADMIN01', name: '관리자', phone: '010-0000-0001', id: 'admin', password: 'admin1234', role: '관리자', active: true },
   ],
   asTickets: [
-    { asId: 'AS001', schoolId: 'S001', schoolName: '한빛초등학교', reportedDate: today, symptom: '물 맛이 이상함', assignedTechId: 'T001', status: '접수', note: '', contractType: '계약', location: '1학년 복도', model: 'WP-3000', paymentMethod: '', paymentInfo: {}, invoiceCompleted: false, schoolNameManual: '', bizNumber: '123-45-67890', email: 'hanbit@edu.kr' },
-    { asId: 'AS002', schoolId: 'S003', schoolName: '푸른고등학교', reportedDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'), symptom: '누수 발생', assignedTechId: 'T002', status: '처리중', note: '현장 확인 완료, 부품 교체 필요', contractType: '계약', location: '교장실', model: 'WP-5000', paymentMethod: '', paymentInfo: {}, invoiceCompleted: false, schoolNameManual: '', bizNumber: '987-65-43210', email: 'pureun@edu.kr' },
-    { asId: 'AS003', schoolId: 'S002', schoolName: '별빛중학교', reportedDate: dayjs().subtract(5, 'day').format('YYYY-MM-DD'), symptom: '전원 안 켜짐', assignedTechId: 'T001', status: '완료', note: '전원 케이블 교체 완료', contractType: '미계약', location: '급식실', model: 'WP-5000', paymentMethod: '카드', paymentInfo: {}, invoiceCompleted: false, schoolNameManual: '', bizNumber: '', email: '' },
-    { asId: 'AS004', schoolId: 'S001', schoolName: '한빛초등학교', reportedDate: dayjs().subtract(2, 'day').format('YYYY-MM-DD'), symptom: '소음 발생', assignedTechId: 'T001', status: '발행대기', note: '펌프 교체 완료', contractType: '계약', location: '교무실', model: 'WP-2000', paymentMethod: '세금계산서', paymentInfo: { repairNote: '펌프 교체', travelFee: true, laborFee: 30000, parts: [], total: 80000, bizNumber: '123-45-67890', invoiceEmail: 'hanbit@edu.kr', invoiceDate: today }, invoiceCompleted: false, schoolNameManual: '', bizNumber: '123-45-67890', email: 'hanbit@edu.kr' },
+    { asId: 'AS001', schoolId: 'S001', schoolName: '한빛초등학교', reportedDate: today, symptom: '물 맛이 이상함', assignedTechId: 'T001', status: '접수', note: '', contractType: '계약', location: '1학년 복도', model: 'WP-3000', paymentMethod: '', paymentInfo: {}, invoiceCompleted: false, schoolNameManual: '', bizNumber: '123-45-67890', email: 'hanbit@edu.kr', quoteSent: false },
+    { asId: 'AS002', schoolId: 'S003', schoolName: '푸른고등학교', reportedDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'), symptom: '누수 발생', assignedTechId: 'T002', status: '처리중', note: '현장 확인 완료, 부품 교체 필요', contractType: '계약', location: '교장실', model: 'WP-5000', paymentMethod: '', paymentInfo: {}, invoiceCompleted: false, schoolNameManual: '', bizNumber: '987-65-43210', email: 'pureun@edu.kr', quoteSent: false },
+    { asId: 'AS003', schoolId: 'S002', schoolName: '별빛중학교', reportedDate: dayjs().subtract(5, 'day').format('YYYY-MM-DD'), symptom: '전원 안 켜짐', assignedTechId: 'T001', status: '완료', note: '전원 케이블 교체 완료', contractType: '미계약', location: '급식실', model: 'WP-5000', paymentMethod: '카드', paymentInfo: {}, invoiceCompleted: false, schoolNameManual: '', bizNumber: '', email: '', quoteSent: false },
+    { asId: 'AS004', schoolId: 'S001', schoolName: '한빛초등학교', reportedDate: dayjs().subtract(2, 'day').format('YYYY-MM-DD'), symptom: '소음 발생', assignedTechId: 'T001', status: '발행대기', note: '펌프 교체 완료', contractType: '계약', location: '교무실', model: 'WP-2000', paymentMethod: '세금계산서', paymentInfo: { repairNote: '펌프 교체', travelFee: true, laborFee: 30000, parts: [], total: 80000, bizNumber: '123-45-67890', invoiceEmail: 'hanbit@edu.kr', invoiceDate: today }, invoiceCompleted: false, schoolNameManual: '', bizNumber: '123-45-67890', email: 'hanbit@edu.kr', quoteSent: true },
   ],
   schools: [
     { schoolId: 'S001', name: '한빛초등학교', region: '서부', address: '서울시 강서구 화곡로 123', contact: '박선생', contactPhone: '02-1234-5678', techId: 'T001', contractType: '유지관리', email: 'hanbit@edu.kr', note: '', bizNumber: '123-45-67890' },
@@ -344,10 +344,21 @@ export const api = {
         schoolNameManual: data.schoolNameManual || '',
         bizNumber: school?.bizNumber || '',
         email: school?.email || '',
+        quoteSent: false,
       })
       return { asId }
     }
     return callApi('createAS', data)
+  },
+
+  async sendEstimate(asId) {
+    if (MOCK_MODE) {
+      await mockDelay(300)
+      const idx = MOCK.asTickets.findIndex(a => a.asId === asId)
+      if (idx !== -1) MOCK.asTickets[idx] = { ...MOCK.asTickets[idx], quoteSent: true }
+      return { success: true }
+    }
+    return callApi('sendEstimate', { asId })
   },
 
   async saveASPayment(data) {
@@ -363,6 +374,33 @@ export const api = {
       return { success: true }
     }
     return callApi('saveASPayment', data)
+  },
+
+  async getCentralWarehouseStock() {
+    if (MOCK_MODE) {
+      await mockDelay(200)
+      return MOCK.parts
+        .filter(p => p.currentStock > 0)
+        .map(p => ({
+          partId: p.partId,
+          name: p.name,
+          spec: p.spec,
+          unit: p.unit,
+          safetyStock: p.safetyStock,
+          currentStock: p.currentStock,
+        }))
+    }
+    return callApi('getCentralWarehouseStock', {})
+  },
+
+  async saveEstimate(data) {
+    if (MOCK_MODE) {
+      await mockDelay(400)
+      const idx = MOCK.asTickets.findIndex(a => a.asId === data.asId)
+      if (idx !== -1) MOCK.asTickets[idx] = { ...MOCK.asTickets[idx], quoteSent: true }
+      return { success: true }
+    }
+    return callApi('saveEstimate', data)
   },
 
   async completeInvoice(asId) {

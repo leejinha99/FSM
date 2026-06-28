@@ -25,10 +25,9 @@ const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 // ─── 방문 카드 ──────────────────────────────────────────────────────────────
 
 function VisitCard({ visit, compact = false, onEdit }) {
-  const isAS = visit.isAS
   const statusStyle = visit.status === '완료'
     ? 'border-l-gray-300 bg-gray-50'
-    : isAS ? 'border-l-orange-500 bg-white' : 'border-l-blue-500 bg-white'
+    : visit.contractType === '유지관리' ? 'border-l-blue-500 bg-white' : 'border-l-orange-500 bg-white'
 
   return (
     <div
@@ -105,7 +104,10 @@ function MonthView({ currentDate, visitsByDate, selectedDate, onSelectDate }) {
                 <div className="flex gap-0.5 flex-wrap justify-center mt-0.5">
                   {dayVisits.slice(0, 3).map(v => (
                     <span key={v.visitId}
-                      className={`w-1.5 h-1.5 rounded-full ${VISIT_TYPE_DOT[v.visitType] || 'bg-gray-400'}`} />
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        v.status === '완료' ? 'bg-gray-400' :
+                        v.contractType === '유지관리' ? 'bg-blue-500' : 'bg-orange-500'
+                      }`} />
                   ))}
                   {dayVisits.length > 3 && (
                     <span className="text-gray-400 leading-none" style={{ fontSize: '8px' }}>+{dayVisits.length - 3}</span>
@@ -226,7 +228,7 @@ function ListView({ visitsByDate, currentDate, onEdit }) {
 
 // ─── AS 접수 등록 모달 (기사용) — 관리자 양식과 동일한 구조 ──────────────────
 
-const AS_MODAL_INPUT = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white'
+const AS_MODAL_INPUT = 'w-full min-w-0 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white'
 
 function TechCreateASModal({ user, onSave, onClose }) {
   const [contractType, setContractType] = useState('')
@@ -390,7 +392,7 @@ function TechCreateASModal({ user, onSave, onClose }) {
             {/* 3. 학교명 */}
             {contractType && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">학교명 <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">학교(업체명) <span className="text-red-500">*</span></label>
                 {isContract ? (
                   <select
                     value={form.schoolId}
@@ -406,7 +408,7 @@ function TechCreateASModal({ user, onSave, onClose }) {
                     value={form.schoolNameManual}
                     onChange={e => update({ schoolNameManual: e.target.value })}
                     className={AS_MODAL_INPUT}
-                    placeholder="학교명 직접 입력"
+                    placeholder="학교(업체명) 직접 입력"
                   />
                 )}
               </div>
@@ -619,6 +621,7 @@ export default function TechCalendar() {
           workContent: a.symptom,
           status: a.status,
           isAS: true,
+          contractType: a.contractType,
         }))
       setVisits([...visitsData, ...asEvents])
     } catch (err) {
@@ -633,6 +636,10 @@ export default function TechCalendar() {
   }, [fetchVisits])
 
   function handleEditVisit(visit) {
+    if (visit.isAS) {
+      navigate('/as')
+      return
+    }
     navigate('/visit/edit/' + visit.visitId, { state: { visit } })
   }
 
@@ -672,7 +679,7 @@ export default function TechCalendar() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 상단 헤더 */}
-      <header className="bg-white border-b border-gray-200 px-4 pt-12 md:pt-4 pb-0 sticky top-0 z-30">
+      <header className="bg-white border-b border-gray-200 px-4 pt-6 md:pt-4 pb-0 sticky top-0 z-30">
         {/* 모바일 전용: 유저 정보 + 로그아웃 */}
         <div className="md:hidden flex items-center justify-between mb-3">
           <div>

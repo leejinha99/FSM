@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 import { api } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
-const INPUT = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white'
+const INPUT = 'w-full min-w-0 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white'
 const MOVE_TYPES = ['입고', '이동', '불량교체']
 const TYPE_BADGE = {
   '입고':   'bg-green-100 text-green-700',
@@ -287,6 +287,8 @@ export default function TechStock() {
   const [movesLoading, setMovesLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [error, setError] = useState('')
+  const [centralStock, setCentralStock] = useState([])
+  const [centralLoading, setCentralLoading] = useState(false)
 
   const currentYear = dayjs().format('YYYY')
   const [filterYear, setFilterYear]   = useState(currentYear)
@@ -335,6 +337,16 @@ export default function TechStock() {
   useEffect(() => {
     if (tab === 'history') loadMoves()
   }, [tab, filterYear, filterMonth])
+
+  useEffect(() => {
+    if (tab === 'central') {
+      setCentralLoading(true)
+      api.getCentralWarehouseStock()
+        .then(setCentralStock)
+        .catch(() => {})
+        .finally(() => setCentralLoading(false))
+    }
+  }, [tab])
 
   const stockedParts = useMemo(() => {
     const filtered = parts.filter(p => p.currentStock > 0)
@@ -428,7 +440,7 @@ export default function TechStock() {
         )}
 
         <div className="flex -mx-4 px-4">
-          {[['stock', '내 재고'], ['history', '이동 내역']].map(([key, label]) => (
+          {[['central', '웰라수 창고'], ['stock', '내 재고'], ['history', '이동 내역']].map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
@@ -443,6 +455,34 @@ export default function TechStock() {
 
       {loading ? <Spinner /> : error ? (
         <div className="p-4 text-sm text-red-500">{error}</div>
+      ) : tab === 'central' ? (
+        centralLoading ? <Spinner /> : centralStock.length === 0 ? (
+          <div className="flex flex-col items-center py-20 text-gray-400">
+            <p className="text-sm">웰라수 창고에 보유 중인 재고가 없습니다</p>
+          </div>
+        ) : (
+          <div className="px-4 py-2 space-y-2">
+            {centralStock.map(p => (
+              <div key={p.partId} className="bg-white rounded-xl px-4 py-3.5 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-800">{p.name}</p>
+                    {p.spec && <p className="text-xs text-gray-400 mt-0.5">{p.spec}</p>}
+                  </div>
+                  <div className="text-right shrink-0 ml-3">
+                    <p className="text-lg font-bold text-gray-800">
+                      {p.currentStock}
+                      <span className="text-sm font-normal text-gray-400 ml-0.5">{p.unit}</span>
+                    </p>
+                    {p.safetyStock > 0 && (
+                      <p className="text-xs text-gray-400">안전재고 {p.safetyStock}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       ) : tab === 'stock' ? (
         stockedParts.length === 0 ? (
           <div className="flex flex-col items-center py-20 text-gray-400">

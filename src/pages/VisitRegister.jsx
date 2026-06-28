@@ -296,6 +296,8 @@ export default function VisitRegister() {
     paymentAmount: '',
     invoiceEmail: '',
     invoiceAmount: '',
+    regionManual: '',
+    schoolNameManual: '',
   })
 
   const school = schools.find(s => s.schoolId === form.schoolId)
@@ -397,7 +399,8 @@ export default function VisitRegister() {
     // 유효성 검사
     if (!form.visitDate) return setError('방문일을 입력해주세요.')
     if (!form.visitTime) return setError('방문 시간을 입력해주세요.')
-    if (!form.schoolId) return setError('학교를 선택해주세요.')
+    if (contractFilter !== '미계약' && !form.schoolId) return setError('학교를 선택해주세요.')
+    if (contractFilter === '미계약' && !form.schoolNameManual.trim()) return setError('학교(업체명)을 입력해주세요.')
     if (!form.visitType) return setError('방문 유형을 선택해주세요.')
     if (!isContracted && !form.paymentMethod) return setError('결제 방식을 선택해주세요.')
     if (form.paymentMethod === '카드' && !form.paymentAmount) return setError('결제 금액을 입력해주세요.')
@@ -413,7 +416,9 @@ export default function VisitRegister() {
       visitDate: form.visitDate,
       visitTime: form.visitTime,
       alertSetting: form.alertSetting,
-      schoolId: form.schoolId,
+      schoolId: contractFilter === '미계약' ? '' : form.schoolId,
+      schoolNameManual: form.schoolNameManual || '',
+      regionManual: form.regionManual || '',
       visitType: form.visitType,
       selectedEquipment: targetEqIds.length > 0 ? targetEqIds : ['전체'],
       workContent: form.workContent,
@@ -504,7 +509,7 @@ export default function VisitRegister() {
 
             {/* 방문일 + 시간 */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
+              <div className="min-w-0">
                 <SectionLabel required>방문일</SectionLabel>
                 <input
                   type="date"
@@ -513,7 +518,7 @@ export default function VisitRegister() {
                   className={inputClass}
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <SectionLabel required>시간</SectionLabel>
                 <input
                   type="time"
@@ -557,7 +562,7 @@ export default function VisitRegister() {
                       onClick={() => {
                         setContractFilter(opt)
                         setRegionFilter('')
-                        updateForm({ schoolId: '', visitType: '', partsUsed: [] })
+                        updateForm({ schoolId: '', visitType: '', partsUsed: [], regionManual: '', schoolNameManual: '' })
                       }}
                       className={`py-2.5 text-sm rounded-xl border font-medium transition
                         ${contractFilter === opt
@@ -570,12 +575,11 @@ export default function VisitRegister() {
                 </div>
               </div>
 
-              {/* 2단계: 지역 */}
-              {contractFilter && (() => {
-                const filtered = schools.filter(s =>
-                  contractFilter === '계약' ? s.contractType === '유지관리' : s.contractType !== '유지관리'
-                )
-                const regions = [...new Set(filtered.map(s => s.region).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'))
+              {/* 2단계: 지역 (계약) */}
+              {contractFilter === '계약' && (() => {
+                const regions = [...new Set(
+                  schools.filter(s => s.contractType === '유지관리').map(s => s.region).filter(Boolean)
+                )].sort((a, b) => a.localeCompare(b, 'ko'))
                 if (regions.length === 0) return null
                 return (
                   <div>
@@ -601,15 +605,23 @@ export default function VisitRegister() {
                 )
               })()}
 
-              {/* 3단계: 학교명 드롭다운 */}
-              {contractFilter && regionFilter && (() => {
+              {/* 2단계: 지역 직접입력 (미계약) */}
+              {contractFilter === '미계약' && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1.5">② 지역</p>
+                  <input
+                    value={form.regionManual}
+                    onChange={e => updateForm({ regionManual: e.target.value })}
+                    placeholder="지역 입력 (예: 서울)"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+
+              {/* 3단계: 학교명 드롭다운 (계약) */}
+              {contractFilter === '계약' && regionFilter && (() => {
                 const schoolList = schools
-                  .filter(s => {
-                    const matchContract = contractFilter === '계약'
-                      ? s.contractType === '유지관리'
-                      : s.contractType !== '유지관리'
-                    return matchContract && s.region === regionFilter
-                  })
+                  .filter(s => s.contractType === '유지관리' && s.region === regionFilter)
                   .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
                 if (schoolList.length === 0) return null
                 return (
@@ -629,6 +641,19 @@ export default function VisitRegister() {
                 )
               })()}
 
+              {/* 3단계: 학교(업체명) 직접입력 (미계약) */}
+              {contractFilter === '미계약' && (
+                <div>
+                  <p className="text-xs text-gray-500 mb-1.5">③ 학교(업체명)</p>
+                  <input
+                    value={form.schoolNameManual}
+                    onChange={e => updateForm({ schoolNameManual: e.target.value })}
+                    placeholder="학교(업체명) 입력"
+                    className={inputClass}
+                  />
+                </div>
+              )}
+
               {/* 선택된 학교 뱃지 */}
               {school && (
                 <div className={`text-xs px-3 py-1.5 rounded-lg inline-block
@@ -641,23 +666,29 @@ export default function VisitRegister() {
             {/* 방문 유형 */}
             <div>
               <SectionLabel required>방문 유형</SectionLabel>
-              <div className="grid grid-cols-4 gap-1.5">
-                {VISIT_TYPES.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => updateForm({ visitType: t, partsUsed: [], selectedEquipmentIds: [] })}
-                    disabled={!form.schoolId}
-                    className={`py-2.5 text-xs rounded-xl border transition font-medium
-                      ${form.visitType === t
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : form.schoolId
-                          ? 'bg-white text-gray-600 border-gray-200'
-                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'}`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+              {(() => {
+                const availableTypes = contractFilter === '미계약' ? ['설치'] : contractFilter === '계약' ? ['필터교체', '점검', 'AS'] : VISIT_TYPES
+                const isReady = contractFilter === '미계약' ? true : !!form.schoolId
+                return (
+                  <div className={`grid gap-1.5`} style={{ gridTemplateColumns: `repeat(${availableTypes.length}, 1fr)` }}>
+                    {availableTypes.map(t => (
+                      <button
+                        key={t}
+                        onClick={() => updateForm({ visitType: t, partsUsed: [], selectedEquipmentIds: [] })}
+                        disabled={!isReady}
+                        className={`py-2.5 text-xs rounded-xl border transition font-medium
+                          ${form.visitType === t
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : isReady
+                              ? 'bg-white text-gray-600 border-gray-200'
+                              : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'}`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
             </div>
           </section>
 

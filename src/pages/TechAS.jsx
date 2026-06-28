@@ -78,6 +78,7 @@ function FeeRow({ label, unitPrice, setUnitPrice, qty, setQty }) {
 function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove }) {
   const [searchText, setSearchText] = useState(row.partName || '')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const filteredParts = useMemo(() => {
     if (!searchText) return allParts
@@ -127,7 +128,29 @@ function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove })
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+    <div className="relative border border-gray-200 rounded-xl p-3 space-y-2">
+      <button
+        type="button"
+        onClick={() => setShowDeleteConfirm(true)}
+        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-gray-100 hover:bg-red-100 flex items-center justify-center z-10 transition"
+      >
+        <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-white rounded-2xl p-5 mx-4 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-gray-800 mb-4">작성하신 부품을 삭제하시겠습니까?</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm text-gray-600">취소</button>
+              <button onClick={() => { setShowDeleteConfirm(false); onRemove(idx) }} className="flex-1 bg-red-500 text-white rounded-xl py-2.5 text-sm font-medium">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Row 1: 부품명 + 규격 */}
       <div className="flex gap-2">
         <div className="flex-[3] relative">
@@ -214,28 +237,23 @@ function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove })
         <span className="text-xs text-gray-500">합계</span>
         <span className="text-sm font-bold text-gray-800">{total.toLocaleString()}원</span>
       </div>
-
-      <button
-        type="button"
-        onClick={() => onRemove(idx)}
-        className="text-xs text-red-400 hover:text-red-600 transition"
-      >
-        삭제
-      </button>
     </div>
   )
 }
 
 function PaymentModal({ ticket, onSave, onClose }) {
   const isContracted = ticket.contractType === '계약' || ticket.contractType === '유지관리'
-  const [repairNote, setRepairNote] = useState('')
+  const [repairNote, setRepairNote] = useState(ticket.note || '')
   const [hasTravelFee, setHasTravelFee] = useState(false)
+  const [travelPrice, setTravelPrice] = useState('')
+  const [travelQty, setTravelQty]     = useState('')
   const [laborPrice, setLaborPrice]   = useState('')
   const [laborQty, setLaborQty]       = useState('')
   const [workPrice, setWorkPrice]     = useState('')
   const [workQty, setWorkQty]         = useState('')
   const [movePrice, setMovePrice]     = useState('')
   const [moveQty, setMoveQty]         = useState('')
+  const [showPayConfirm, setShowPayConfirm] = useState(false)
   const [partRows, setPartRows] = useState([{ partId: '', partName: '', spec: '', unitPrice: 0, qty: 1, total: 0, _userEdited: false }])
   const [allParts, setAllParts] = useState([])
   const [paymentMethod, setPaymentMethod] = useState('카드')
@@ -250,11 +268,12 @@ function PaymentModal({ ticket, onSave, onClose }) {
     api.getAllPartsInfo().then(data => setAllParts(data)).catch(() => {})
   }, [])
 
+  const travelTotal = (Number(travelPrice) || 0) * (Number(travelQty) || 0)
   const laborTotal = (Number(laborPrice) || 0) * (Number(laborQty) || 0)
   const workTotal  = (Number(workPrice) || 0)  * (Number(workQty) || 0)
   const moveTotal  = (Number(movePrice) || 0)  * (Number(moveQty) || 0)
   const partsTotal = partRows.reduce((s, r) => s + (Number(r.total) || 0), 0)
-  const grandTotal = laborTotal + workTotal + moveTotal + partsTotal
+  const grandTotal = travelTotal + laborTotal + workTotal + moveTotal + partsTotal
   const vatTotal   = Math.round(grandTotal * 1.1)
 
   function updatePartRow(idx, patch) {
@@ -277,6 +296,7 @@ function PaymentModal({ ticket, onSave, onClose }) {
         paymentInfo: {
           repairNote,
           hasTravelFee,
+          travelPrice: Number(travelPrice), travelQty: Number(travelQty), travelTotal,
           laborPrice: Number(laborPrice), laborQty: Number(laborQty), laborTotal,
           workPrice:  Number(workPrice),  workQty:  Number(workQty),  workTotal,
           movePrice:  Number(movePrice),  moveQty:  Number(moveQty),  moveTotal,
@@ -321,10 +341,10 @@ function PaymentModal({ ticket, onSave, onClose }) {
             <textarea value={repairNote} onChange={e => setRepairNote(e.target.value)} className={INPUT} rows={2} placeholder="수리 내용을 입력하세요" />
           </div>
 
-          {/* 출장비 유무 */}
+          {/* 출장비 */}
           <div>
             <p className="text-xs font-medium text-gray-600 mb-1.5">출장비 유무</p>
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-2">
               {[['있음', true], ['없음', false]].map(([label, val]) => (
                 <button key={label} type="button" onClick={() => setHasTravelFee(val)}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition
@@ -333,6 +353,9 @@ function PaymentModal({ ticket, onSave, onClose }) {
                 </button>
               ))}
             </div>
+            {hasTravelFee && (
+              <FeeRow label="출장비" unitPrice={travelPrice} setUnitPrice={setTravelPrice} qty={travelQty} setQty={setTravelQty} />
+            )}
           </div>
 
           {/* 공임비 */}
@@ -432,20 +455,116 @@ function PaymentModal({ ticket, onSave, onClose }) {
         )}
 
         <button
-          onClick={handleSubmit}
+          onClick={() => setShowPayConfirm(true)}
           disabled={saving}
           className="mt-5 w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold disabled:opacity-50 active:bg-blue-700 transition"
         >
           {saving ? '처리 중...' : paymentMethod === '카드' ? '카드 결제 완료' : '세금계산서 발행 요청'}
         </button>
       </div>
+
+      {showPayConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center" onClick={() => setShowPayConfirm(false)}>
+          <div className="bg-white rounded-2xl p-5 mx-4 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-gray-800 mb-4">
+              {paymentMethod === '카드' ? '카드결제 완료 처리 하시겠습니까?' : '세금계산서 발행을 요청하시겠습니까?'}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowPayConfirm(false)} className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm text-gray-600">취소</button>
+              <button onClick={() => { setShowPayConfirm(false); handleSubmit() }} className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-sm font-medium">확인</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 견적서 발송 모달 ─────────────────────────────────────────────────────────
+
+function EstimateModal({ ticket, onSave, onClose }) {
+  const [email, setEmail] = useState(ticket.email || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  async function handleSubmit() {
+    if (!email.trim()) return setError('이메일을 입력해주세요.')
+    setSaving(true)
+    setError('')
+    try {
+      await api.saveEstimate({ asId: ticket.asId, schoolId: ticket.schoolId, email: email.trim() })
+      onSave()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center" onClick={onClose}>
+      <div className="bg-white w-full max-w-lg rounded-t-2xl md:rounded-2xl p-5 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold text-gray-800">견적서 발송</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{ticket.schoolName}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+            <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-gray-50 rounded-xl p-3">
+            <p className="text-xs text-gray-500 mb-1">증상</p>
+            <p className="text-sm text-gray-800">{ticket.symptom}</p>
+          </div>
+          {ticket.note && (
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs text-gray-500 mb-1">수리내역</p>
+              <p className="text-sm text-gray-800">{ticket.note}</p>
+            </div>
+          )}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">발송 이메일 <span className="text-red-500">*</span></label>
+            <input value={email} onChange={e => setEmail(e.target.value)} className={INPUT} placeholder="이메일 주소 입력" />
+            {!ticket.email && <p className="text-xs text-amber-600 mt-1">등록된 이메일이 없습니다. 직접 입력해주세요.</p>}
+          </div>
+        </div>
+
+        {error && <div className="mt-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2.5 rounded-xl">{error}</div>}
+
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={saving}
+          className="mt-5 w-full bg-blue-600 text-white py-3.5 rounded-xl font-semibold disabled:opacity-50 active:bg-blue-700 transition"
+        >
+          {saving ? '처리 중...' : '견적서 발송'}
+        </button>
+      </div>
+
+      {showConfirm && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center" onClick={() => setShowConfirm(false)}>
+          <div className="bg-white rounded-2xl p-5 mx-4 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-gray-800 mb-1">견적서 발송</p>
+            <p className="text-xs text-gray-500 mb-4">{email} 로 발송하시겠습니까?</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowConfirm(false)} className="flex-1 border border-gray-200 rounded-xl py-2.5 text-sm text-gray-600">취소</button>
+              <button onClick={() => { setShowConfirm(false); handleSubmit() }} disabled={saving} className="flex-1 bg-blue-600 text-white rounded-xl py-2.5 text-sm font-medium">발송</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 // ── AS 상세 모달 ────────────────────────────────────────────────────────────
 
-function ASDetailModal({ ticket, onSave, onClose, onPayment }) {
+function ASDetailModal({ ticket, onSave, onClose, onPayment, onEstimate }) {
   const [note, setNote] = useState(ticket.note || '')
   const [saving, setSaving] = useState(false)
   const nextStatus = NEXT_STATUS[ticket.status]
@@ -603,31 +722,52 @@ function ASDetailModal({ ticket, onSave, onClose, onPayment }) {
           )}
         </div>
 
-        <div className="mt-5 flex gap-2 flex-wrap">
-          <button
-            onClick={handleSaveNote}
-            disabled={saving}
-            className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition"
-          >
-            메모 저장
-          </button>
-          {nextStatus && (
-            <button
-              onClick={() => handleStatusChange(nextStatus)}
-              disabled={saving}
-              className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-700 transition"
-            >
-              {saving ? '처리 중...' : `→ ${nextStatus}`}
-            </button>
-          )}
-          {ticket.status === '수리완료' && (
-            <button
-              onClick={onPayment}
-              disabled={saving}
-              className="w-full bg-green-600 text-white py-3 rounded-xl font-medium disabled:opacity-50 active:bg-green-700 transition"
-            >
-              결제 처리
-            </button>
+        <div className="mt-5 space-y-2">
+          {ticket.status === '수리완료' ? (
+            <>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveNote}
+                  disabled={saving}
+                  className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition"
+                >
+                  메모 저장
+                </button>
+                <button
+                  onClick={onEstimate}
+                  disabled={saving}
+                  className="flex-1 bg-blue-100 text-blue-700 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-200 transition"
+                >
+                  견적서 발송
+                </button>
+              </div>
+              <button
+                onClick={onPayment}
+                disabled={saving}
+                className="w-full bg-green-600 text-white py-3 rounded-xl font-medium disabled:opacity-50 active:bg-green-700 transition"
+              >
+                결제 처리
+              </button>
+            </>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveNote}
+                disabled={saving}
+                className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition"
+              >
+                메모 저장
+              </button>
+              {nextStatus && (
+                <button
+                  onClick={() => handleStatusChange(nextStatus)}
+                  disabled={saving}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-700 transition"
+                >
+                  {saving ? '처리 중...' : `→ ${nextStatus}`}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -645,6 +785,7 @@ export default function TechAS() {
   const [statusFilter, setStatusFilter] = useState('전체')
   const [selected, setSelected] = useState(null)
   const [paymentTicket, setPaymentTicket] = useState(null)
+  const [estimateTicket, setEstimateTicket] = useState(null)
 
   const currentYear = dayjs().format('YYYY')
   const [filterYear, setFilterYear]   = useState(currentYear)
@@ -817,12 +958,13 @@ export default function TechAS() {
         </div>
       )}
 
-      {selected && !paymentTicket && (
+      {selected && !paymentTicket && !estimateTicket && (
         <ASDetailModal
           ticket={selected}
           onSave={() => { setSelected(null); load() }}
           onClose={() => setSelected(null)}
           onPayment={() => { setPaymentTicket(selected); setSelected(null) }}
+          onEstimate={() => { setEstimateTicket(selected); setSelected(null) }}
         />
       )}
 
@@ -831,6 +973,14 @@ export default function TechAS() {
           ticket={paymentTicket}
           onSave={() => { setPaymentTicket(null); load() }}
           onClose={() => setPaymentTicket(null)}
+        />
+      )}
+
+      {estimateTicket && (
+        <EstimateModal
+          ticket={estimateTicket}
+          onSave={() => { setEstimateTicket(null); load() }}
+          onClose={() => setEstimateTicket(null)}
         />
       )}
 

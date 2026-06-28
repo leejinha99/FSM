@@ -45,6 +45,9 @@ function doPost(e) {
       case 'getASInvoices':    result = handleGetASInvoices(data);    break;
       case 'getProductNames':  result = handleGetProductNames(data);  break;
       case 'getAllPartsInfo':  result = handleGetAllPartsInfo(data);  break;
+      case 'sendEstimate':    result = handleSendEstimate(data);    break;
+      case 'saveEstimate':   result = handleSaveEstimate(data);   break;
+      case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
       default:
         throw new Error('알 수 없는 액션: ' + action);
     }
@@ -86,6 +89,9 @@ function doGet(e) {
         case 'getASInvoices':   result = handleGetASInvoices(data);   break;
         case 'getProductNames': result = handleGetProductNames(data); break;
         case 'getAllPartsInfo':  result = handleGetAllPartsInfo(data); break;
+        case 'sendEstimate':    result = handleSendEstimate(data);   break;
+        case 'saveEstimate':   result = handleSaveEstimate(data);   break;
+        case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
         default:
           throw new Error('알 수 없는 액션: ' + action);
       }
@@ -158,7 +164,7 @@ function formatTime(t) {
 // ────────────────────────────────────────────────────────────
 
 // 기사 시트 컬럼 순서:
-// 기사ID | 이름 | 연락처 | 아이디 | 비밀번호 | 권한 | 활성여부
+// 기사ID(0) | 이름(1) | 연락처(2) | 아이디(3) | 비밀번호(4) | 직함(5) | 권한(6) | 활성여부(7)
 function handleLogin(data) {
   var sheet = getSheet('기사');
   var rows = sheet.getDataRange().getValues();
@@ -167,14 +173,15 @@ function handleLogin(data) {
     var row = rows[i];
     var id       = String(row[3]).trim();
     var password = String(row[4]).trim();
-    var active   = row[6];
+    var active   = row[7];
 
     if (id === data.id && password === data.password && active) {
       return {
         techId: String(row[0]),
         name:   String(row[1]),
         phone:  String(row[2]),
-        role:   String(row[5]),
+        title:  String(row[5] || ''),
+        role:   String(row[6]),
       };
     }
   }
@@ -191,9 +198,13 @@ function handleGetMyVisits(data) {
   var schoolSheet = getSheet('학교');
 
   var schoolMap = {};
-  sheetToObjects(schoolSheet).forEach(function(s) {
-    schoolMap[s['학교ID']] = s['학교명'];
-  });
+  var sRows = schoolSheet.getDataRange().getValues();
+  for (var si = 1; si < sRows.length; si++) {
+    schoolMap[String(sRows[si][0])] = {
+      name:         String(sRows[si][1]),
+      contractType: String(sRows[si][7] || ''),
+    };
+  }
 
   var rows = visitSheet.getDataRange().getValues();
   if (rows.length < 2) return [];
@@ -207,18 +218,21 @@ function handleGetMyVisits(data) {
     if (techId !== data.techId) continue;
     if (visitDate < data.start || visitDate > data.end) continue;
 
+    var schoolId   = String(r[4]);
+    var schoolInfo = schoolMap[schoolId] || {};
     result.push({
-      visitId:     String(r[0]),
-      visitDate:   visitDate,
-      visitTime:   formatTime(r[2]),
+      visitId:      String(r[0]),
+      visitDate:    visitDate,
+      visitTime:    formatTime(r[2]),
       alertSetting: String(r[3]),
-      schoolId:    String(r[4]),
-      schoolName:  schoolMap[String(r[4])] || '',
-      techId:      techId,
-      visitType:   String(r[7]),
-      workContent: String(r[8]),
+      schoolId:     schoolId,
+      schoolName:   schoolInfo.name || '',
+      contractType: schoolInfo.contractType || '',
+      techId:       techId,
+      visitType:    String(r[7]),
+      workContent:  String(r[8]),
       nextScheduledDate: formatDate(r[9]),
-      status:      String(r[19]),
+      status:       String(r[19]),
     });
   }
 
@@ -237,15 +251,18 @@ function handleGetMySchools(data) {
     var r = rows[i];
     if (String(r[6]) !== data.techId) continue;
     result.push({
-      schoolId:     String(r[0]),
-      name:         String(r[1]),
-      region:       String(r[2]),
-      address:      String(r[3]),
-      contact:      String(r[4]),
-      contactPhone: String(r[5]),
-      techId:       String(r[6]),
-      contractType: String(r[7]),
-      email:        String(r[8]),
+      schoolId:            String(r[0]),
+      name:                String(r[1]),
+      region:              String(r[2]),
+      address:             String(r[3]),
+      contact:             String(r[4]),
+      contactPhone:        String(r[5]),
+      techId:              String(r[6]),
+      contractType:        String(r[7]),
+      email:               String(r[8]),
+      bizRegistrationLink: String(r[9]  || ''),
+      note:                String(r[10] || ''),
+      bizNumber:           String(r[11] || ''),
     });
   }
   return result;
@@ -435,18 +452,44 @@ function handleSaveVisit(data) {
     var visitId = makeId('V');
     var today   = formatDate(new Date());
 
+    // ── 미계약 설치: 학교명 직접입력이면 학교 신규 생성 ──────
+    var resolvedSchoolId = data.schoolId || '';
+    if (data.visitType === '설치' && !resolvedSchoolId && data.schoolNameManual) {
+      var schoolSheet2 = ss.getSheetByName('학교');
+      var newSchoolId = makeId('S');
+      schoolSheet2.appendRow([
+        newSchoolId,
+        data.schoolNameManual,
+        data.regionManual || '',
+        '', '', '',
+        data.techId || '',
+        '비계약',
+        '', '', '', '',
+      ]);
+      resolvedSchoolId = newSchoolId;
+    }
+
     // ── 설치 유형이면 장비 먼저 등록 ──────────────────────
     if (data.visitType === '설치' && data.newEquipment) {
       var eqSheet = ss.getSheetByName('설치장비');
       var eqId = makeId('E');
+      var schoolNameForEq = data.newEquipment.schoolName || data.schoolNameManual || '';
+      if (!schoolNameForEq && resolvedSchoolId) {
+        var schoolSheet = ss.getSheetByName('학교');
+        var sRows = schoolSheet.getDataRange().getValues();
+        for (var si = 1; si < sRows.length; si++) {
+          if (String(sRows[si][0]) === resolvedSchoolId) { schoolNameForEq = String(sRows[si][1]); break; }
+        }
+      }
       eqSheet.appendRow([
-        eqId,
-        data.schoolId,
-        data.newEquipment.location || '',
-        data.newEquipment.model    || '',
-        data.newEquipment.installDate || today,
-        data.newEquipment.filterInterval || 6,
-        '정상',
+        eqId,                                      // 0: 장비ID
+        resolvedSchoolId,                          // 1: 학교ID
+        schoolNameForEq,                           // 2: 학교명
+        data.newEquipment.location || '',          // 3: 설치위치
+        data.newEquipment.model    || '',          // 4: 모델명
+        data.newEquipment.installDate || today,    // 5: 설치일
+        data.newEquipment.filterInterval || 6,     // 6: 필터교체주기
+        '정상',                                    // 7: 상태
       ]);
     }
 
@@ -461,7 +504,7 @@ function handleSaveVisit(data) {
       data.visitDate,                   // 방문일
       data.visitTime,                   // 방문시간
       data.alertSetting || '끄기',      // 알림설정
-      data.schoolId,                    // 학교ID
+      resolvedSchoolId,                 // 학교ID
       eqStr,                            // 대상장비
       data.techId,                      // 기사ID
       data.visitType,                   // 방문유형
@@ -518,23 +561,25 @@ function handleGetAllSchools(data) {
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
     result.push({
-      schoolId:     String(r[0]),
-      name:         String(r[1]),
-      region:       String(r[2]),
-      address:      String(r[3]),
-      contact:      String(r[4]),
-      contactPhone: String(r[5]),
-      techId:       String(r[6]),
-      contractType: String(r[7]),
-      email:        String(r[8]),
-      note:         String(r[10] || ''),
-      bizNumber:    String(r[11] || ''),
+      schoolId:            String(r[0]),
+      name:                String(r[1]),
+      region:              String(r[2]),
+      address:             String(r[3]),
+      contact:             String(r[4]),
+      contactPhone:        String(r[5]),
+      techId:              String(r[6]),
+      contractType:        String(r[7]),
+      email:               String(r[8]),
+      bizRegistrationLink: String(r[9]  || ''),
+      note:                String(r[10] || ''),
+      bizNumber:           String(r[11] || ''),
     });
   }
   return result;
 }
 
 // 기사 전체 조회
+// 기사ID(0)|이름(1)|연락처(2)|아이디(3)|비밀번호(4)|직함(5)|권한(6)|활성여부(7)
 function handleGetAllTechs(data) {
   var rows = getSheet('기사').getDataRange().getValues();
   if (rows.length < 2) return [];
@@ -546,8 +591,9 @@ function handleGetAllTechs(data) {
       name:   String(r[1]),
       phone:  String(r[2]),
       id:     String(r[3]),
-      role:   String(r[5]),
-      active: Boolean(r[6]),
+      title:  String(r[5] || ''),
+      role:   String(r[6]),
+      active: Boolean(r[7]),
     });
   }
   return result;
@@ -639,6 +685,7 @@ function handleGetAllAS(data) {
       schoolNameManual:  schoolNameManual,
       bizNumber:         schoolInfo.bizNumber || '',
       email:             schoolInfo.email || '',
+      quoteSent:         Boolean(r[14]),
     });
   }
   return result;
@@ -690,6 +737,7 @@ function handleSaveSchool(data) {
 }
 
 // 기사 저장 (추가/수정)
+// col: ID(1) 이름(2) 연락처(3) 아이디(4) 비밀번호(5) 직함(6) 권한(7) 활성여부(8)
 function handleSaveTech(data) {
   var sheet = getSheet('기사');
   var rows = sheet.getDataRange().getValues();
@@ -700,12 +748,11 @@ function handleSaveTech(data) {
         var row = i + 1;
         sheet.getRange(row, 2).setValue(data.name  || rows[i][1]);
         sheet.getRange(row, 3).setValue(data.phone || rows[i][2]);
-        if (data.id)       sheet.getRange(row, 4).setValue(data.id);
-        if (data.password) sheet.getRange(row, 5).setValue(data.password);
-        if (data.role)     sheet.getRange(row, 6).setValue(data.role);
-        if (typeof data.active !== 'undefined') {
-          sheet.getRange(row, 7).setValue(data.active);
-        }
+        if (data.id)                                  sheet.getRange(row, 4).setValue(data.id);
+        if (data.password)                            sheet.getRange(row, 5).setValue(data.password);
+        if (typeof data.title !== 'undefined')        sheet.getRange(row, 6).setValue(data.title);
+        if (data.role)                                sheet.getRange(row, 7).setValue(data.role);
+        if (typeof data.active !== 'undefined')       sheet.getRange(row, 8).setValue(data.active);
         return { techId: data.techId };
       }
     }
@@ -718,6 +765,7 @@ function handleSaveTech(data) {
     data.phone    || '',
     data.id       || '',
     data.password || '',
+    data.title    || '',
     data.role     || '기사',
     true,
   ]);
@@ -766,6 +814,7 @@ function handleGetMyAS(data) {
       schoolNameManual:  schoolNameManual,
       bizNumber:         schoolInfo.bizNumber || '',
       email:             schoolInfo.email || '',
+      quoteSent:         Boolean(r[14]),
     });
   }
   return result;
@@ -793,11 +842,25 @@ function handleCreateAS(data) {
       '',                             // 11: 결제정보JSON
       false,                          // 12: 발행완료여부
       data.schoolNameManual || '',    // 13: 학교명직접입력
+      false,                          // 14: 견적서발송여부
     ]);
     return { asId: asId };
   } finally {
     lock.releaseLock();
   }
+}
+
+// 견적서 발송 처리
+function handleSendEstimate(data) {
+  var sheet = getSheet('AS접수');
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === data.asId) {
+      sheet.getRange(i + 1, 15).setValue(true);
+      return { asId: data.asId };
+    }
+  }
+  throw new Error('AS 접수 건을 찾을 수 없습니다: ' + data.asId);
 }
 
 // 방문기록 수정 (기사용)
@@ -878,6 +941,40 @@ function handleSaveASPayment(data) {
           break;
         }
       }
+
+      // 결제내역 시트 저장
+      var paymentSheet = ss.getSheetByName('결제내역');
+      if (paymentSheet) {
+        var pi = data.paymentInfo || {};
+        var asRow = rows[i];
+        var schoolSheet3 = ss.getSheetByName('학교');
+        var sRows3 = schoolSheet3.getDataRange().getValues();
+        var schoolName3 = String(asRow[13] || '');
+        if (!schoolName3) {
+          for (var k = 1; k < sRows3.length; k++) {
+            if (String(sRows3[k][0]) === String(asRow[1])) { schoolName3 = String(sRows3[k][1]); break; }
+          }
+        }
+        var repairDesc = pi.repairNote || String(asRow[6] || '');
+        if (pi.parts && pi.parts.length > 0) {
+          var partStr = pi.parts.map(function(p) { return p.partName + ' x' + p.qty; }).join(', ');
+          repairDesc = repairDesc ? repairDesc + ' / ' + partStr : partStr;
+        }
+        var grandTotal = pi.vatTotal || pi.total || 0;
+        paymentSheet.appendRow([
+          schoolName3,
+          formatDate(asRow[2]),
+          String(asRow[3] || ''),
+          String(asRow[8] || ''),
+          String(asRow[9] || ''),
+          newStatus,
+          String(asRow[7] || ''),
+          repairDesc,
+          data.paymentMethod || '',
+          grandTotal,
+        ]);
+      }
+
       return { asId: data.asId, status: newStatus };
     }
     throw new Error('AS 접수 건을 찾을 수 없습니다: ' + data.asId);
@@ -1080,5 +1177,125 @@ function handleGetStockMoves(data) {
   }
 
   result.sort(function(a, b) { return b.date.localeCompare(a.date); });
+  return result;
+}
+
+// 견적서 저장 (견적서내역 시트에 저장 + AS접수 quoteSent = true)
+function handleSaveEstimate(data) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch(e) { throw new Error('잠시 후 다시 시도해주세요.'); }
+  try {
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+
+    // AS접수 시트에서 quoteSent 업데이트
+    var asSheet = ss.getSheetByName('AS접수');
+    var asRows = asSheet.getDataRange().getValues();
+    for (var i = 1; i < asRows.length; i++) {
+      if (String(asRows[i][0]) !== data.asId) continue;
+      asSheet.getRange(i + 1, 15).setValue(true);
+      // 학교 이메일 업데이트 (없었다가 새로 입력한 경우)
+      if (data.schoolId && data.schoolEmail) {
+        var schoolSheet = ss.getSheetByName('학교');
+        var sRows = schoolSheet.getDataRange().getValues();
+        for (var j = 1; j < sRows.length; j++) {
+          if (String(sRows[j][0]) === data.schoolId) {
+            schoolSheet.getRange(j + 1, 9).setValue(data.schoolEmail);
+            break;
+          }
+        }
+      }
+      break;
+    }
+
+    // 견적서내역 시트 저장 (없으면 스킵)
+    var estimateSheet = ss.getSheetByName('견적서내역');
+    if (estimateSheet) {
+      var pi = data.estimateInfo || {};
+      var repairDesc = pi.repairNote || '';
+      if (pi.parts && pi.parts.length > 0) {
+        var partStr = pi.parts.map(function(p) { return p.partName + ' x' + p.qty; }).join(', ');
+        repairDesc = repairDesc ? repairDesc + ' / ' + partStr : partStr;
+      }
+      estimateSheet.appendRow([
+        makeId('EST'),
+        data.asId || '',
+        data.schoolName || '',
+        data.reportedDate || '',
+        data.symptom || '',
+        data.schoolEmail || '',
+        repairDesc,
+        pi.vatTotal || pi.total || 0,
+        formatDate(new Date()),
+      ]);
+    }
+
+    return { asId: data.asId };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 웰라수 창고(중앙 창고) 재고 조회
+function handleGetCentralWarehouseStock(data) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // 중앙 창고 ID 목록 (type='창고')
+  var warehouseRows = ss.getSheetByName('창고').getDataRange().getValues();
+  var centralIds = [];
+  for (var i = 1; i < warehouseRows.length; i++) {
+    if (String(warehouseRows[i][2]) === '창고') {
+      centralIds.push(String(warehouseRows[i][0]));
+    }
+  }
+  if (centralIds.length === 0) return [];
+
+  // 재고이동 집계
+  var stockMap = {};
+  var moveRows = ss.getSheetByName('재고이동').getDataRange().getValues();
+  for (var i = 1; i < moveRows.length; i++) {
+    var mr = moveRows[i];
+    var partId = String(mr[2]);
+    var from   = String(mr[4]);
+    var to     = String(mr[5]);
+    var qty    = Number(mr[6]) || 0;
+    if (!stockMap[partId]) stockMap[partId] = 0;
+    for (var ci = 0; ci < centralIds.length; ci++) {
+      if (to   === centralIds[ci]) stockMap[partId] += qty;
+      if (from === centralIds[ci]) stockMap[partId] -= qty;
+    }
+  }
+
+  // 부품 목록과 합산
+  var partSheet = ss.getSheetByName('부품');
+  var partRows = partSheet.getDataRange().getValues();
+  if (partRows.length < 2) return [];
+
+  var headers = partRows[0];
+  var col = {};
+  headers.forEach(function(h, i) { col[String(h).trim()] = i; });
+
+  var result = [];
+  var lastName = '';
+  for (var i = 1; i < partRows.length; i++) {
+    var r = partRows[i];
+    var pid = String(r[col['부품ID']] || '').trim();
+    if (!pid) pid = 'ROW' + i;
+    var name = String(r[col['부품명']] || '').trim();
+    if (name) lastName = name;
+    else name = lastName;
+    if (!name) continue;
+
+    var currentStock = stockMap[pid] || 0;
+    if (currentStock <= 0) continue;
+
+    result.push({
+      partId:        pid,
+      name:          name,
+      spec:          String(r[col['규격']] || '').trim(),
+      unit:          String(r[col['단위']] || '').trim(),
+      safetyStock:   Number(r[col['안전재고']]) || 0,
+      currentStock:  currentStock,
+    });
+  }
   return result;
 }

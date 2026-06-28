@@ -231,9 +231,9 @@ export default function AdminStock() {
   const [showModal, setShowModal] = useState(false)
 
   const currentYear = dayjs().format('YYYY')
-  const [filterTechId, setFilterTechId]   = useState('')
-  const [filterYear, setFilterYear]       = useState(currentYear)
-  const [filterMonth, setFilterMonth]     = useState(String(dayjs().month() + 1))
+  const [filterWarehouseId, setFilterWarehouseId] = useState('')
+  const [filterYear, setFilterYear]               = useState(currentYear)
+  const [filterMonth, setFilterMonth]             = useState(String(dayjs().month() + 1))
 
   async function loadMeta() {
     try {
@@ -254,11 +254,8 @@ export default function AdminStock() {
   async function loadMoves() {
     setLoading(true)
     try {
-      const selectedWH = filterTechId
-        ? warehouses.find(w => w.type === '기사' && w.techId === filterTechId)
-        : null
       const data = await api.getStockMoves({
-        warehouseId: selectedWH?.warehouseId,
+        warehouseId: filterWarehouseId || undefined,
         year: filterYear,
         month: filterMonth ? Number(filterMonth) : undefined,
       })
@@ -273,7 +270,7 @@ export default function AdminStock() {
   useEffect(() => { loadMeta() }, [])
   useEffect(() => {
     if (warehouses.length > 0) loadMoves()
-  }, [warehouses, filterTechId, filterYear, filterMonth])
+  }, [warehouses, filterWarehouseId, filterYear, filterMonth])
 
   const techMap = useMemo(
     () => Object.fromEntries(techs.map(t => [t.techId, t.name])),
@@ -295,12 +292,12 @@ export default function AdminStock() {
       <div className="sticky top-0 bg-gray-50 z-10 px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex gap-2 mb-3">
           <select
-            value={filterTechId}
-            onChange={e => setFilterTechId(e.target.value)}
+            value={filterWarehouseId}
+            onChange={e => setFilterWarehouseId(e.target.value)}
             className="border border-gray-200 rounded-xl px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400"
           >
-            <option value="">전체 기사</option>
-            {techs.map(t => <option key={t.techId} value={t.techId}>{t.name}</option>)}
+            <option value="">전체 창고</option>
+            {warehouses.map(w => <option key={w.warehouseId} value={w.warehouseId}>{w.name}</option>)}
           </select>
           <select
             value={filterYear}

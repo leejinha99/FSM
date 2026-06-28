@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../../api/sheetsApi.js'
 
 const INPUT = 'w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 bg-white'
+const TITLE_OPTIONS = ['', '기사', '수석기사', '주임기사', '팀장', '대리', '과장', '부장', '엔지니어', '수석엔지니어']
 
 function Field({ label, children }) {
   return (
@@ -15,7 +16,7 @@ function Field({ label, children }) {
 function TechModal({ tech, onSave, onClose }) {
   const isEdit = Boolean(tech?.techId)
   const [form, setForm] = useState(tech ?? {
-    name: '', phone: '', id: '', password: '', active: true,
+    name: '', phone: '', id: '', password: '', title: '', active: true,
   })
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
@@ -65,6 +66,11 @@ function TechModal({ tech, onSave, onClose }) {
                 className={INPUT} placeholder="010-0000-0000" />
             </Field>
           </div>
+          <Field label="직함">
+            <select value={form.title || ''} onChange={e => set('title', e.target.value)} className={INPUT}>
+              {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t || '선택 안 함'}</option>)}
+            </select>
+          </Field>
           <Field label={`아이디 ${isEdit ? '' : '*'}`}>
             <input value={form.id} onChange={e => set('id', e.target.value)}
               className={INPUT} placeholder="로그인 아이디" disabled={isEdit} />
@@ -184,6 +190,7 @@ export default function AdminTechs() {
                   <thead>
                     <tr className="border-b border-gray-100 bg-gray-50">
                       <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">이름</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">직함</th>
                       <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">연락처</th>
                       <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">아이디</th>
                       <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">상태</th>
@@ -197,6 +204,7 @@ export default function AdminTechs() {
                         className={`border-b border-gray-50 hover:bg-gray-50 cursor-pointer transition-colors last:border-0 ${!t.active ? 'opacity-50' : ''}`}
                       >
                         <td className="px-4 py-3 text-sm font-medium text-gray-800">{t.name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{t.title || '-'}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{t.phone || '-'}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{t.id}</td>
                         <td className="px-4 py-3">
@@ -233,7 +241,10 @@ function TechCard({ tech, onClick }) {
     >
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="font-medium text-gray-800 text-sm">{tech.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-medium text-gray-800 text-sm">{tech.name}</p>
+            {tech.title && <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">{tech.title}</span>}
+          </div>
           <p className="text-xs text-gray-400 mt-0.5">{tech.phone || '연락처 없음'} · {tech.id}</p>
         </div>
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${tech.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>

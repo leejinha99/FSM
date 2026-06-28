@@ -126,7 +126,7 @@ function StockMoveModal({ myWarehouseId, allParts, warehouses, onSave, onClose }
           {/* 날짜 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">날짜</label>
-            <input type="date" value={form.date} onChange={e => update({ date: e.target.value })} className={INPUT} />
+            <input type="date" value={form.date} onChange={e => update({ date: e.target.value })} className={`${INPUT} max-w-full`} />
           </div>
 
           {/* 부품명 검색 */}

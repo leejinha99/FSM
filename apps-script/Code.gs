@@ -542,6 +542,27 @@ function handleSaveVisit(data) {
       ]);
     }
 
+    // ── 기사별관리일정 시트에 관리년도 기록 ─────────────────────
+    var visitDate = data.visitDate ? new Date(data.visitDate) : new Date();
+    var vMonth   = visitDate.getMonth() + 1;
+    var vYear    = visitDate.getFullYear();
+    var mgmtYear = (vMonth >= 3) ? vYear : vYear - 1;
+
+    var schedSheet = ss.getSheetByName('기사별관리일정');
+    if (!schedSheet) {
+      schedSheet = ss.insertSheet('기사별관리일정');
+    }
+    var schedVals = schedSheet.getLastRow() > 0
+      ? schedSheet.getRange(1, 1, schedSheet.getLastRow(), 1).getValues()
+      : [];
+    var yearExists = false;
+    for (var yi = 0; yi < schedVals.length; yi++) {
+      if (String(schedVals[yi][0]) === String(mgmtYear)) { yearExists = true; break; }
+    }
+    if (!yearExists) {
+      schedSheet.appendRow([mgmtYear]);
+    }
+
     return { visitId: visitId };
   } finally {
     lock.releaseLock();
@@ -918,7 +939,8 @@ function handleSaveASPayment(data) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch(e) { throw new Error('잠시 후 다시 시도해주세요.'); }
   try {
-    var sheet = getSheet('AS접수');
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sheet = ss.getSheetByName('AS접수');
     var rows = sheet.getDataRange().getValues();
 
     for (var i = 1; i < rows.length; i++) {

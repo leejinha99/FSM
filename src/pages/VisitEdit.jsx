@@ -20,6 +20,17 @@ export default function VisitEdit() {
   const location = useLocation()
 
   const visit = location.state?.visit
+
+  const [form, setForm] = useState({
+    visitDate:         visit?.visitDate || dayjs().format('YYYY-MM-DD'),
+    visitTime:         visit?.visitTime || '',
+    alertSetting:      visit?.alertSetting || '끄기',
+    workContent:       visit?.workContent || '',
+    nextScheduledDate: visit?.nextScheduledDate || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
   if (!visit) {
     return (
       <div className="min-h-screen bg-gray-50 max-w-lg mx-auto flex flex-col items-center justify-center gap-4">
@@ -28,16 +39,6 @@ export default function VisitEdit() {
       </div>
     )
   }
-
-  const [form, setForm] = useState({
-    visitDate:         visit.visitDate || dayjs().format('YYYY-MM-DD'),
-    visitTime:         visit.visitTime || '',
-    alertSetting:      visit.alertSetting || '끄기',
-    workContent:       visit.workContent || '',
-    nextScheduledDate: visit.nextScheduledDate || '',
-  })
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
   function set(key, value) {
     setForm(f => ({ ...f, [key]: value }))

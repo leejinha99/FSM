@@ -44,6 +44,8 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
   const [model, setModel] = useState(ticket.model || '')
   const [saving, setSaving] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [sendingEstimate, setSendingEstimate] = useState(false)
+  const [quoteSent, setQuoteSent] = useState(Boolean(ticket.quoteSent))
 
   const nextStatus = NEXT_STATUS[ticket.status]
 
@@ -80,6 +82,19 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
       console.error(e)
     } finally {
       setCompleting(false)
+    }
+  }
+
+  async function handleSendEstimate() {
+    setSendingEstimate(true)
+    try {
+      await api.sendEstimate(ticket.asId)
+      setQuoteSent(true)
+      onSave()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSendingEstimate(false)
     }
   }
 
@@ -274,6 +289,17 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
                   {completing ? '처리 중...' : '세금계산서 발행 완료'}
                 </button>
               )}
+              <button
+                onClick={handleSendEstimate}
+                disabled={sendingEstimate || quoteSent}
+                className={`w-full py-3 rounded-xl font-medium transition ${
+                  quoteSent
+                    ? 'bg-green-50 text-green-600 border border-green-200 cursor-default'
+                    : 'bg-teal-600 text-white disabled:opacity-50 active:bg-teal-700'
+                }`}
+              >
+                {sendingEstimate ? '발송 중...' : quoteSent ? '✓ 견적서 발송됨' : '견적서 발송하기'}
+              </button>
             </>
           )}
         </div>
@@ -438,10 +464,12 @@ function CreateASModal({ schools, techs, onSave, onClose }) {
             </div>
           )}
 
-          {/* 3. 학교명 */}
+          {/* 3. 학교(업체명) */}
           {contractType && (
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">학교명 <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                {isContract ? '학교명' : '학교(업체명)'} <span className="text-red-500">*</span>
+              </label>
               {isContract ? (
                 <select
                   value={form.schoolId}
@@ -457,7 +485,7 @@ function CreateASModal({ schools, techs, onSave, onClose }) {
                   value={form.schoolNameManual}
                   onChange={e => update({ schoolNameManual: e.target.value })}
                   className={INPUT}
-                  placeholder="학교명 직접 입력"
+                  placeholder="학교(업체명) 직접 입력"
                 />
               )}
             </div>
@@ -535,7 +563,7 @@ function CreateASModal({ schools, techs, onSave, onClose }) {
           {/* 6. 접수일 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">접수일</label>
-            <input type="date" value={form.reportedDate} onChange={e => update({ reportedDate: e.target.value })} className={INPUT} />
+            <input type="date" value={form.reportedDate} onChange={e => update({ reportedDate: e.target.value })} className={`${INPUT} max-w-full`} />
           </div>
 
           {/* 7. 증상 */}
@@ -629,7 +657,11 @@ export default function AdminAS() {
       const m = filterMonth.padStart(2, '0')
       list = list.filter(a => a.reportedDate.startsWith(`${filterYear}-${m}`))
     }
-    if (contractFilter) list = list.filter(a => a.contractType === contractFilter)
+    if (contractFilter === '견적서발송') {
+      list = list.filter(a => a.quoteSent)
+    } else if (contractFilter) {
+      list = list.filter(a => a.contractType === contractFilter)
+    }
     if (schoolSearch.trim()) {
       const q = schoolSearch.trim().toLowerCase()
       list = list.filter(a => a.schoolName.toLowerCase().includes(q))
@@ -675,8 +707,8 @@ export default function AdminAS() {
 
         {/* 계약구분 필터 + 학교명 검색 */}
         <div className="flex gap-2 mb-3 flex-wrap">
-          <div className="flex gap-1">
-            {['', '계약', '미계약'].map(v => (
+          <div className="flex gap-1 flex-wrap">
+            {['', '계약', '미계약', '견적서발송'].map(v => (
               <button
                 key={v}
                 onClick={() => setContractFilter(v)}

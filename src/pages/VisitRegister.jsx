@@ -508,23 +508,23 @@ export default function VisitRegister() {
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide">기본 정보</h2>
 
             {/* 방문일 + 시간 */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="min-w-0">
+            <div className="grid grid-cols-1 gap-3">
+              <div>
                 <SectionLabel required>방문일</SectionLabel>
                 <input
                   type="date"
                   value={form.visitDate}
                   onChange={e => updateForm({ visitDate: e.target.value })}
-                  className={inputClass}
+                  className={`${inputClass} w-full max-w-full`}
                 />
               </div>
-              <div className="min-w-0">
+              <div>
                 <SectionLabel required>시간</SectionLabel>
                 <input
                   type="time"
                   value={form.visitTime}
                   onChange={e => updateForm({ visitTime: e.target.value })}
-                  className={inputClass}
+                  className={`${inputClass} w-full max-w-full`}
                 />
               </div>
             </div>

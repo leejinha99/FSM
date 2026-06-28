@@ -3,7 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { api } from '../../api/sheetsApi.js'
 
-const YEAR_OPTIONS = [2026, 2027, 2028, 2029, 2030]
+const YEAR_OPTIONS = [2025, 2026, 2027, 2028, 2029, 2030]
+const VIEW_MODES = ['기사별', '지역별', '일별']
+const DAY_KO = ['일', '월', '화', '수', '목', '금', '토']
 
 function getDefaultYear() {
   const m = dayjs().month() + 1
@@ -49,31 +51,94 @@ function InfoRow({ label, value }) {
   )
 }
 
+function SchoolMatrix({ schools, visitMap, MONTHS, onSchoolClick, onCellClick }) {
+  return (
+    <div className="overflow-x-auto -mx-4">
+      <table className="min-w-max text-xs border-collapse">
+        <thead>
+          <tr>
+            <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[120px] max-w-[160px]">
+              학교명
+            </th>
+            {MONTHS.map(m => (
+              <th key={m.key}
+                className={`border border-gray-200 px-2 py-2.5 text-center font-semibold min-w-[52px]
+                  ${m.key === dayjs().format('YYYY-MM') ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
+              >
+                {m.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {schools.map((school, idx) => (
+            <tr key={school.schoolId}>
+              <td
+                className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
+                  ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                onClick={() => onSchoolClick(school)}
+              >
+                {school.name}
+              </td>
+              {MONTHS.map(m => {
+                const cellVisits = visitMap[school.schoolId]?.[m.key] || []
+                const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
+                return (
+                  <td
+                    key={m.key}
+                    className={`border border-gray-200 px-2 py-2.5 text-center cursor-pointer hover:bg-blue-50 transition
+                      ${isCurrentMonth ? 'bg-blue-50/50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                    onClick={() => onCellClick({ school, monthKey: m.key, label: m.label, visits: cellVisits })}
+                  >
+                    {cellVisits.length > 0 ? (
+                      <span className="text-blue-700 font-medium">
+                        {cellVisits.map(v => dayjs(v.visitDate).date() + '일').join(', ')}
+                      </span>
+                    ) : (
+                      <span className="text-gray-200">-</span>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function AdminTechSchedule() {
   const location = useLocation()
   const navigate = useNavigate()
   const initialTechId = new URLSearchParams(location.search).get('techId') || ''
 
+  const [viewMode, setViewMode] = useState('기사별')
   const [selectedYear, setSelectedYear] = useState(getDefaultYear)
   const [techs, setTechs] = useState([])
   const [schools, setSchools] = useState([])
   const [selectedTechId, setSelectedTechId] = useState(initialTechId)
+  const [selectedRegion, setSelectedRegion] = useState('')
   const [visits, setVisits] = useState([])
+  const [allVisits, setAllVisits] = useState([])
   const [loading, setLoading] = useState(true)
   const [visitLoading, setVisitLoading] = useState(false)
+  const [allVisitsLoading, setAllVisitsLoading] = useState(false)
 
-  // 학교 상세 모달
   const [schoolModal, setSchoolModal] = useState(null)
   const [equipment, setEquipment] = useState([])
   const [equipLoading, setEquipLoading] = useState(false)
   const [noteText, setNoteText] = useState('')
   const [noteEditing, setNoteEditing] = useState(false)
   const [noteSaving, setNoteSaving] = useState(false)
-
-  // 방문기록 모달
   const [visitModal, setVisitModal] = useState(null)
 
   const MONTHS = useMemo(() => getMonths(selectedYear), [selectedYear])
+
+  const regions = useMemo(() => {
+    const set = new Set(schools.map(s => s.region).filter(Boolean))
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [schools])
 
   useEffect(() => {
     async function load() {
@@ -91,6 +156,7 @@ export default function AdminTechSchedule() {
   }, [])
 
   useEffect(() => {
+    if (viewMode !== '기사별') return
     if (!selectedTechId) { setVisits([]); return }
     const start = `${selectedYear}-03-01`
     const end = `${selectedYear + 1}-02-28`
@@ -99,13 +165,31 @@ export default function AdminTechSchedule() {
       .then(setVisits)
       .catch(console.error)
       .finally(() => setVisitLoading(false))
-  }, [selectedTechId, selectedYear])
+  }, [selectedTechId, selectedYear, viewMode])
+
+  useEffect(() => {
+    if (viewMode === '기사별') return
+    const start = `${selectedYear}-03-01`
+    const end = `${selectedYear + 1}-02-28`
+    setAllVisitsLoading(true)
+    api.getAllVisits(start, end, null)
+      .then(setAllVisits)
+      .catch(console.error)
+      .finally(() => setAllVisitsLoading(false))
+  }, [viewMode, selectedYear])
 
   const managedSchools = useMemo(() => {
     return schools
       .filter(s => s.techId === selectedTechId && s.contractType === '유지관리')
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   }, [schools, selectedTechId])
+
+  const regionSchools = useMemo(() => {
+    if (!selectedRegion) return []
+    return schools
+      .filter(s => s.region === selectedRegion && s.contractType === '유지관리')
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+  }, [schools, selectedRegion])
 
   const visitMap = useMemo(() => {
     const map = {}
@@ -117,6 +201,26 @@ export default function AdminTechSchedule() {
     })
     return map
   }, [visits])
+
+  const allVisitMap = useMemo(() => {
+    const map = {}
+    allVisits.forEach(v => {
+      const mk = dayjs(v.visitDate).format('YYYY-MM')
+      if (!map[v.schoolId]) map[v.schoolId] = {}
+      if (!map[v.schoolId][mk]) map[v.schoolId][mk] = []
+      map[v.schoolId][mk].push(v)
+    })
+    return map
+  }, [allVisits])
+
+  const visitsByDate = useMemo(() => {
+    const grouped = {}
+    allVisits.forEach(v => {
+      if (!grouped[v.visitDate]) grouped[v.visitDate] = []
+      grouped[v.visitDate].push(v)
+    })
+    return grouped
+  }, [allVisits])
 
   async function openSchoolModal(school) {
     setSchoolModal(school)
@@ -155,112 +259,176 @@ export default function AdminTechSchedule() {
 
   return (
     <div className="p-4">
-      {/* 학년도 필터 */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-3">
-        {YEAR_OPTIONS.map(y => (
+      {/* 학년도 드롭다운 */}
+      <div className="flex items-center gap-3 mb-3">
+        <select
+          value={selectedYear}
+          onChange={e => setSelectedYear(Number(e.target.value))}
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:border-blue-400 bg-white"
+        >
+          {YEAR_OPTIONS.map(y => (
+            <option key={y} value={y}>{y}년도</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-400">{selectedYear}년 3월 ~ {selectedYear + 1}년 2월</p>
+      </div>
+
+      {/* 뷰 모드 탭 */}
+      <div className="flex gap-1 mb-4 bg-gray-100 p-1 rounded-xl">
+        {VIEW_MODES.map(mode => (
           <button
-            key={y}
-            onClick={() => setSelectedYear(y)}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition
-              ${selectedYear === y ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600'}`}
+            key={mode}
+            onClick={() => setViewMode(mode)}
+            className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition
+              ${viewMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
           >
-            {y}년도
+            {mode}
           </button>
         ))}
       </div>
 
-      {/* 기사 선택 */}
-      <div className="mb-4">
-        <p className="text-xs text-gray-500 mb-2">
-          {selectedYear}년 3월 ~ {selectedYear + 1}년 2월 학사연도
-        </p>
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {techs.map(t => (
-            <button
-              key={t.techId}
-              onClick={() => setSelectedTechId(t.techId)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition
-                ${selectedTechId === t.techId
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 active:bg-gray-50'}`}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {!selectedTechId ? (
-        <div className="flex flex-col items-center py-16 text-gray-400">
-          <svg className="w-12 h-12 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p className="text-sm">위에서 기사를 선택하세요</p>
-        </div>
-      ) : visitLoading ? <Spinner /> : (
+      {/* ─── 기사별 뷰 ─── */}
+      {viewMode === '기사별' && (
         <>
-          <p className="text-xs text-gray-500 mb-3">유지관리 {managedSchools.length}개교</p>
+          <div className="mb-4">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+              {techs.map(t => (
+                <button
+                  key={t.techId}
+                  onClick={() => setSelectedTechId(t.techId)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition
+                    ${selectedTechId === t.techId
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white border border-gray-200 text-gray-600 active:bg-gray-50'}`}
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {managedSchools.length === 0 ? (
+          {!selectedTechId ? (
             <div className="flex flex-col items-center py-16 text-gray-400">
-              <p className="text-sm">담당 유지관리 학교가 없습니다</p>
+              <svg className="w-12 h-12 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm">위에서 기사를 선택하세요</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto -mx-4">
-              <table className="min-w-max text-xs border-collapse">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[120px] max-w-[160px]">
-                      학교명
-                    </th>
-                    {MONTHS.map(m => (
-                      <th key={m.key}
-                        className={`border border-gray-200 px-2 py-2.5 text-center font-semibold min-w-[52px]
-                          ${m.key === dayjs().format('YYYY-MM') ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
-                      >
-                        {m.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {managedSchools.map((school, idx) => (
-                    <tr key={school.schoolId}>
-                      <td
-                        className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
-                          ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                        onClick={() => openSchoolModal(school)}
-                      >
-                        {school.name}
-                      </td>
-                      {MONTHS.map(m => {
-                        const cellVisits = visitMap[school.schoolId]?.[m.key] || []
-                        const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
-                        return (
-                          <td
-                            key={m.key}
-                            className={`border border-gray-200 px-2 py-2.5 text-center cursor-pointer hover:bg-blue-50 transition
-                              ${isCurrentMonth ? 'bg-blue-50/50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                            onClick={() => setVisitModal({ school, monthKey: m.key, label: m.label, visits: cellVisits })}
-                          >
-                            {cellVisits.length > 0 ? (
-                              <span className="text-blue-700 font-medium">
-                                {cellVisits.map(v => dayjs(v.visitDate).date() + '일').join(', ')}
-                              </span>
-                            ) : (
-                              <span className="text-gray-200">-</span>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          ) : visitLoading ? <Spinner /> : (
+            <>
+              <p className="text-xs text-gray-500 mb-3">유지관리 {managedSchools.length}개교</p>
+              {managedSchools.length === 0 ? (
+                <div className="flex flex-col items-center py-16 text-gray-400">
+                  <p className="text-sm">담당 유지관리 학교가 없습니다</p>
+                </div>
+              ) : (
+                <SchoolMatrix
+                  schools={managedSchools}
+                  visitMap={visitMap}
+                  MONTHS={MONTHS}
+                  onSchoolClick={openSchoolModal}
+                  onCellClick={setVisitModal}
+                />
+              )}
+            </>
           )}
         </>
+      )}
+
+      {/* ─── 지역별 뷰 ─── */}
+      {viewMode === '지역별' && (
+        <>
+          <div className="mb-4">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+              {regions.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setSelectedRegion(r)}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition
+                    ${selectedRegion === r
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white border border-gray-200 text-gray-600 active:bg-gray-50'}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {!selectedRegion ? (
+            <div className="flex flex-col items-center py-16 text-gray-400">
+              <p className="text-sm">위에서 지역을 선택하세요</p>
+            </div>
+          ) : allVisitsLoading ? <Spinner /> : (
+            <>
+              <p className="text-xs text-gray-500 mb-3">{selectedRegion} 유지관리 {regionSchools.length}개교</p>
+              {regionSchools.length === 0 ? (
+                <div className="flex flex-col items-center py-16 text-gray-400">
+                  <p className="text-sm">해당 지역에 유지관리 학교가 없습니다</p>
+                </div>
+              ) : (
+                <SchoolMatrix
+                  schools={regionSchools}
+                  visitMap={allVisitMap}
+                  MONTHS={MONTHS}
+                  onSchoolClick={openSchoolModal}
+                  onCellClick={setVisitModal}
+                />
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {/* ─── 일별 뷰 ─── */}
+      {viewMode === '일별' && (
+        allVisitsLoading ? <Spinner /> : (
+          <div className="space-y-5">
+            {Object.keys(visitsByDate).length === 0 ? (
+              <div className="flex flex-col items-center py-16 text-gray-400">
+                <p className="text-sm">해당 학년도에 방문 기록이 없습니다</p>
+              </div>
+            ) : Object.keys(visitsByDate).sort().map(dateStr => {
+              const day = dayjs(dateStr)
+              const items = [...visitsByDate[dateStr]].sort((a, b) =>
+                (a.visitTime || '').localeCompare(b.visitTime || '')
+              )
+              const isToday = dateStr === dayjs().format('YYYY-MM-DD')
+              return (
+                <div key={dateStr}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
+                      {day.format('M월 D일')} ({DAY_KO[day.day()]})
+                    </span>
+                    {isToday && (
+                      <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">오늘</span>
+                    )}
+                    <span className="text-xs text-gray-400">{items.length}건</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {items.map(v => (
+                      <div key={v.visitId} className="bg-white rounded-xl px-4 py-2.5 shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-gray-800 text-sm truncate">{v.schoolName}</p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {v.techName} · {v.visitType}{v.visitTime ? ` · ${v.visitTime}` : ''}
+                            </p>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0
+                            ${v.status === '완료' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {v.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
       )}
 
       {/* ─── 학교 상세 모달 ─── */}

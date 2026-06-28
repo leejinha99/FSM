@@ -24,10 +24,17 @@ const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 
 // ─── 방문 카드 ──────────────────────────────────────────────────────────────
 
+function getContractColor(visit) {
+  if (visit.status === '완료') return { border: 'border-l-gray-300', bg: 'bg-gray-50' }
+  const isContract = visit.contractType === '유지관리' || visit.contractType === '계약'
+  return isContract
+    ? { border: 'border-l-blue-500', bg: 'bg-blue-50/40' }
+    : { border: 'border-l-orange-500', bg: 'bg-orange-50/40' }
+}
+
 function VisitCard({ visit, compact = false, onEdit }) {
-  const statusStyle = visit.status === '완료'
-    ? 'border-l-gray-300 bg-gray-50'
-    : visit.contractType === '유지관리' ? 'border-l-blue-500 bg-white' : 'border-l-orange-500 bg-white'
+  const { border, bg } = getContractColor(visit)
+  const statusStyle = `${border} ${bg}`
 
   return (
     <div
@@ -106,7 +113,7 @@ function MonthView({ currentDate, visitsByDate, selectedDate, onSelectDate }) {
                     <span key={v.visitId}
                       className={`w-1.5 h-1.5 rounded-full ${
                         v.status === '완료' ? 'bg-gray-400' :
-                        v.contractType === '유지관리' ? 'bg-blue-500' : 'bg-orange-500'
+                        (v.contractType === '유지관리' || v.contractType === '계약') ? 'bg-blue-500' : 'bg-orange-500'
                       }`} />
                   ))}
                   {dayVisits.length > 3 && (
@@ -679,7 +686,7 @@ export default function TechCalendar() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 상단 헤더 */}
-      <header className="bg-white border-b border-gray-200 px-4 pt-6 md:pt-4 pb-0 sticky top-0 z-30">
+      <header className="bg-white border-b border-gray-200 px-4 pt-2 md:pt-4 pb-0 sticky top-0 z-30">
         {/* 모바일 전용: 유저 정보 + 로그아웃 */}
         <div className="md:hidden flex items-center justify-between mb-3">
           <div>

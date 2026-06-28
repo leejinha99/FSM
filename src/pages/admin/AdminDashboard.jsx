@@ -12,11 +12,6 @@ const VISIT_TYPE_BADGE = {
   '설치':     'bg-purple-100 text-purple-700',
 }
 
-const AS_STATUS_BADGE = {
-  '접수':   'bg-yellow-100 text-yellow-700',
-  '처리중': 'bg-orange-100 text-orange-700',
-  '완료':   'bg-green-100 text-green-600',
-}
 
 function StatCard({ label, value, color, onClick }) {
   return (
@@ -63,7 +58,6 @@ export default function AdminDashboard() {
     newAS: 0, processingAS: 0, completedAS: 0,
   })
   const [todayVisits, setTodayVisits] = useState([])
-  const [pendingAS, setPendingAS] = useState([])
   const [invoiceList, setInvoiceList] = useState([])
   const [techList, setTechList] = useState([])
   const [loading, setLoading] = useState(true)
@@ -78,19 +72,17 @@ export default function AdminDashboard() {
           api.getAllAS(),
         ])
         const activeTechs = techs.filter(t => t.role === '기사' && t.active)
-        const pending = asAll.filter(a => a.status !== '완료')
         const invoicePendingList = asAll.filter(a => a.status === '발행대기')
         setStats({
           schools: schools.length,
           techs: activeTechs.length,
           invoicePending: invoicePendingList.length,
-          pendingAS: pending.length,
+          pendingAS: asAll.filter(a => a.status !== '완료').length,
           newAS:        asAll.filter(a => a.status === '접수').length,
           processingAS: asAll.filter(a => a.status === '처리중').length,
           completedAS:  asAll.filter(a => a.status === '완료').length,
         })
         setTodayVisits(visits.slice(0, 5))
-        setPendingAS(pending.slice(0, 3))
         setInvoiceList(invoicePendingList)
         setTechList(activeTechs)
       } catch (err) {
@@ -124,11 +116,10 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard label="관리 학교"      value={stats.schools}       color="text-blue-600"   onClick={() => navigate('/admin/schools')} />
         <StatCard label="소속 기사"      value={stats.techs}         color="text-green-600"  onClick={() => navigate('/admin/techs')} />
         <StatCard label="세금계산서 발행" value={stats.invoicePending} color="text-purple-600" onClick={() => navigate('/admin/as?status=발행대기')} />
-        <StatCard label="미처리 AS"      value={stats.pendingAS}     color="text-red-500"    onClick={() => navigate('/admin/as')} />
       </div>
 
       {/* AS 접수함 요약 */}
@@ -255,39 +246,7 @@ export default function AdminDashboard() {
         )}
       </section>
 
-      {pendingAS.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-700">미처리 AS</h3>
-            <button onClick={() => navigate('/admin/as')} className="text-xs text-blue-600">전체 보기</button>
-          </div>
-          <div className="space-y-2">
-            {pendingAS.map(a => (
-              <div key={a.asId} className="bg-white rounded-xl px-4 py-3 shadow-sm border border-red-100">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-800 text-sm truncate">{a.schoolName}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{a.reportedDate} · {a.symptom}</p>
-                  </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${AS_STATUS_BADGE[a.status] || ''}`}>
-                    {a.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {stats.pendingAS > 3 && (
-              <button
-                onClick={() => navigate('/admin/as')}
-                className="w-full text-center text-xs text-blue-600 py-2 bg-white rounded-xl border border-gray-100 shadow-sm"
-              >
-                + {stats.pendingAS - 3}건 더 보기
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-
-      {invoiceList.length === 0 && todayVisits.length === 0 && pendingAS.length === 0 && techList.length === 0 && (
+      {invoiceList.length === 0 && todayVisits.length === 0 && techList.length === 0 && (
         <div className="flex flex-col items-center py-8 text-gray-400">
           <p className="text-sm">오늘 방문 일정과 미처리 AS가 없습니다</p>
         </div>

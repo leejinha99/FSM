@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import dayjs from 'dayjs'
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter'
+dayjs.extend(isSameOrAfter)
 import { api } from '../../api/sheetsApi.js'
 
 const DAY_KO = ['일', '월', '화', '수', '목', '금', '토']
@@ -31,10 +33,21 @@ export default function AdminVisits() {
   const [visits, setVisits]   = useState([])
   const [techs, setTechs]     = useState([])
   const [loading, setLoading] = useState(true)
-  const [startDate, setStartDate] = useState(dayjs().startOf('month').format('YYYY-MM-DD'))
-  const [endDate, setEndDate]     = useState(dayjs().endOf('month').format('YYYY-MM-DD'))
-  const [techFilter, setTechFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
+  const currentYear = dayjs().year()
+  const [filterYear,  setFilterYear]  = useState(String(currentYear))
+  const [filterMonth, setFilterMonth] = useState(String(dayjs().month() + 1))
+  const [filterDay,   setFilterDay]   = useState('')
+  const [techFilter,  setTechFilter]  = useState('')
+  const [typeFilter,  setTypeFilter]  = useState('')
+
+  const { startDate, endDate } = useMemo(() => {
+    const y = filterYear
+    const m = filterMonth ? filterMonth.padStart(2, '0') : null
+    const d = filterDay   ? filterDay.padStart(2, '0')   : null
+    if (d && m) { const dt = `${y}-${m}-${d}`; return { startDate: dt, endDate: dt } }
+    if (m) return { startDate: `${y}-${m}-01`, endDate: dayjs(`${y}-${m}`).endOf('month').format('YYYY-MM-DD') }
+    return { startDate: `${y}-01-01`, endDate: `${y}-12-31` }
+  }, [filterYear, filterMonth, filterDay])
 
   async function load() {
     setLoading(true)
@@ -73,24 +86,45 @@ export default function AdminVisits() {
     <div>
       {/* 필터 영역 */}
       <div className="sticky top-0 bg-gray-50 z-10 px-4 pt-4 pb-3 border-b border-gray-100 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">시작일</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
-            />
+            <label className="text-xs text-gray-500 mb-1 block">년도</label>
+            <select
+              value={filterYear}
+              onChange={e => { setFilterYear(e.target.value); setFilterDay('') }}
+              className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
+            >
+              {Array.from({ length: 5 }, (_, i) => String(currentYear - 1 + i)).map(y => (
+                <option key={y} value={y}>{y}년</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">종료일</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
-            />
+            <label className="text-xs text-gray-500 mb-1 block">월</label>
+            <select
+              value={filterMonth}
+              onChange={e => { setFilterMonth(e.target.value); setFilterDay('') }}
+              className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">전체</option>
+              {Array.from({ length: 12 }, (_, i) => String(i + 1)).map(m => (
+                <option key={m} value={m}>{m}월</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">일</label>
+            <select
+              value={filterDay}
+              onChange={e => setFilterDay(e.target.value)}
+              disabled={!filterMonth}
+              className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white disabled:bg-gray-50 disabled:text-gray-300"
+            >
+              <option value="">전체</option>
+              {Array.from({ length: filterMonth ? dayjs(`${filterYear}-${filterMonth.padStart(2,'0')}`).daysInMonth() : 31 }, (_, i) => String(i + 1)).map(d => (
+                <option key={d} value={d}>{d}일</option>
+              ))}
+            </select>
           </div>
         </div>
 

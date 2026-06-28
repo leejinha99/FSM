@@ -37,7 +37,7 @@ function Field({ label, children }) {
   )
 }
 
-function SchoolEditModal({ school, techs, onSave, onClose }) {
+function SchoolEditModal({ school, techs, schools: allSchools, onSave, onClose }) {
   const [form, setForm] = useState(school ?? {
     name: '', region: '', address: '', contact: '', contactPhone: '',
     techId: '', contractType: '유지관리', email: '', note: '', bizNumber: '',
@@ -46,6 +46,21 @@ function SchoolEditModal({ school, techs, onSave, onClose }) {
   const [err, setErr] = useState('')
 
   function set(key, val) { setForm(f => ({ ...f, [key]: val })) }
+
+  const techRegions = useMemo(() => {
+    if (!form.techId) return []
+    const set = new Set(
+      allSchools
+        .filter(s => s.techId === form.techId && s.region)
+        .map(s => s.region)
+    )
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [form.techId, allSchools])
+
+  function handleTechChange(techId) {
+    set('techId', techId)
+    set('region', '')
+  }
 
   async function handleSubmit() {
     if (!form.name.trim()) { setErr('학교명을 입력하세요.'); return }
@@ -76,9 +91,22 @@ function SchoolEditModal({ school, techs, onSave, onClose }) {
           <Field label="학교명 *">
             <input value={form.name} onChange={e => set('name', e.target.value)} className={INPUT} placeholder="학교명 입력" />
           </Field>
+          <Field label="담당 기사">
+            <select value={form.techId} onChange={e => handleTechChange(e.target.value)} className={INPUT}>
+              <option value="">미배정</option>
+              {techs.map(t => <option key={t.techId} value={t.techId}>{t.name}</option>)}
+            </select>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="지역">
-              <input value={form.region} onChange={e => set('region', e.target.value)} className={INPUT} placeholder="예: 서부" />
+              {techRegions.length > 0 ? (
+                <select value={form.region} onChange={e => set('region', e.target.value)} className={INPUT}>
+                  <option value="">지역 선택</option>
+                  {techRegions.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              ) : (
+                <input value={form.region} onChange={e => set('region', e.target.value)} className={INPUT} placeholder="예: 서부" />
+              )}
             </Field>
             <Field label="계약구분">
               <select value={form.contractType} onChange={e => set('contractType', e.target.value)} className={INPUT}>
@@ -87,12 +115,6 @@ function SchoolEditModal({ school, techs, onSave, onClose }) {
               </select>
             </Field>
           </div>
-          <Field label="담당 기사">
-            <select value={form.techId} onChange={e => set('techId', e.target.value)} className={INPUT}>
-              <option value="">미배정</option>
-              {techs.map(t => <option key={t.techId} value={t.techId}>{t.name}</option>)}
-            </select>
-          </Field>
           <Field label="주소">
             <input value={form.address} onChange={e => set('address', e.target.value)} className={INPUT} placeholder="도로명 주소" />
           </Field>
@@ -231,9 +253,14 @@ export default function AdminSchools() {
   const techMap = useMemo(() => Object.fromEntries(techs.map(t => [t.techId, t.name])), [techs])
 
   const regions = useMemo(() => {
-    const set = new Set(schools.map(s => s.region).filter(Boolean))
+    const source = techFilter ? schools.filter(s => s.techId === techFilter) : schools
+    const set = new Set(source.map(s => s.region).filter(Boolean))
     return [...set].sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [schools])
+  }, [schools, techFilter])
+
+  useEffect(() => {
+    if (regionFilter && !regions.includes(regionFilter)) setRegionFilter('')
+  }, [regions])
 
   const filtered = useMemo(() => {
     return schools.filter(s => {
@@ -387,6 +414,7 @@ export default function AdminSchools() {
         <SchoolEditModal
           school={editSchool}
           techs={techs}
+          schools={schools}
           onSave={handleSaved}
           onClose={() => setEditSchool(null)}
         />
@@ -396,6 +424,7 @@ export default function AdminSchools() {
         <SchoolEditModal
           school={null}
           techs={techs}
+          schools={schools}
           onSave={handleSaved}
           onClose={() => setShowAdd(false)}
         />

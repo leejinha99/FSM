@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { api } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -262,6 +262,7 @@ function EquipmentMultiSelect({ equipment, selectedIds, onChange, hint }) {
 export default function VisitRegister() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [schools, setSchools] = useState([])
   const [equipment, setEquipment] = useState([])
@@ -281,7 +282,7 @@ export default function VisitRegister() {
     visitDate: dayjs().format('YYYY-MM-DD'),
     visitTime: '09:00',
     alertSetting: '30분전',
-    schoolId: '',
+    schoolId: location.state?.schoolId || '',
     visitType: '',
     selectedEquipmentIds: [],
     newEquipment: { ...INITIAL_NEW_EQ },

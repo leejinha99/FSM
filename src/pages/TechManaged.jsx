@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
-import { api } from '../../api/sheetsApi.js'
+import { useAuth } from '../context/AuthContext.jsx'
+import { api } from '../api/sheetsApi.js'
 
 const YEAR_OPTIONS = [2026, 2027, 2028, 2029, 2030]
 
@@ -20,7 +21,7 @@ function getMonths(startYear) {
 
 function Spinner() {
   return (
-    <div className="flex justify-center py-16">
+    <div className="flex justify-center py-8">
       <svg className="animate-spin w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -49,20 +50,16 @@ function InfoRow({ label, value }) {
   )
 }
 
-export default function AdminTechSchedule() {
-  const location = useLocation()
+export default function TechManaged() {
+  const { user } = useAuth()
   const navigate = useNavigate()
-  const initialTechId = new URLSearchParams(location.search).get('techId') || ''
 
   const [selectedYear, setSelectedYear] = useState(getDefaultYear)
-  const [techs, setTechs] = useState([])
   const [schools, setSchools] = useState([])
-  const [selectedTechId, setSelectedTechId] = useState(initialTechId)
   const [visits, setVisits] = useState([])
   const [loading, setLoading] = useState(true)
   const [visitLoading, setVisitLoading] = useState(false)
 
-  // 학교 상세 모달
   const [schoolModal, setSchoolModal] = useState(null)
   const [equipment, setEquipment] = useState([])
   const [equipLoading, setEquipLoading] = useState(false)
@@ -70,42 +67,34 @@ export default function AdminTechSchedule() {
   const [noteEditing, setNoteEditing] = useState(false)
   const [noteSaving, setNoteSaving] = useState(false)
 
-  // 방문기록 모달
   const [visitModal, setVisitModal] = useState(null)
 
   const MONTHS = useMemo(() => getMonths(selectedYear), [selectedYear])
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [t, s] = await Promise.all([api.getAllTechs(), api.getAllSchools()])
-        setTechs(t.filter(t => t.role === '기사' && t.active))
-        setSchools(s)
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+    if (!user?.techId) return
+    api.getMySchools(user.techId)
+      .then(setSchools)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [user?.techId])
 
   useEffect(() => {
-    if (!selectedTechId) { setVisits([]); return }
+    if (!user?.techId) return
     const start = `${selectedYear}-03-01`
     const end = `${selectedYear + 1}-02-28`
     setVisitLoading(true)
-    api.getAllVisits(start, end, selectedTechId)
+    api.getMyVisits(user.techId, start, end)
       .then(setVisits)
       .catch(console.error)
       .finally(() => setVisitLoading(false))
-  }, [selectedTechId, selectedYear])
+  }, [user?.techId, selectedYear])
 
-  const managedSchools = useMemo(() => {
-    return schools
-      .filter(s => s.techId === selectedTechId && s.contractType === '유지관리')
+  const managedSchools = useMemo(() =>
+    schools
+      .filter(s => s.contractType === '유지관리')
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
-  }, [schools, selectedTechId])
+  , [schools])
 
   const visitMap = useMemo(() => {
     const map = {}
@@ -151,10 +140,15 @@ export default function AdminTechSchedule() {
     }
   }
 
-  if (loading) return <Spinner />
+  if (loading) return <div className="p-4"><Spinner /></div>
 
   return (
-    <div className="p-4">
+    <div className="p-4 pb-24 md:pb-8">
+      <div className="mb-4">
+        <h2 className="text-base font-bold text-gray-800 mb-0.5">관리계정</h2>
+        <p className="text-xs text-gray-400">유지관리 학교 연간 방문 현황</p>
+      </div>
+
       {/* 학년도 필터 */}
       <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-3">
         {YEAR_OPTIONS.map(y => (
@@ -169,98 +163,67 @@ export default function AdminTechSchedule() {
         ))}
       </div>
 
-      {/* 기사 선택 */}
-      <div className="mb-4">
-        <p className="text-xs text-gray-500 mb-2">
-          {selectedYear}년 3월 ~ {selectedYear + 1}년 2월 학사연도
-        </p>
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {techs.map(t => (
-            <button
-              key={t.techId}
-              onClick={() => setSelectedTechId(t.techId)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition
-                ${selectedTechId === t.techId
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 active:bg-gray-50'}`}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        {selectedYear}.3 ~ {selectedYear + 1}.2 · 유지관리 {managedSchools.length}개교
+      </p>
 
-      {!selectedTechId ? (
+      {visitLoading ? <Spinner /> : managedSchools.length === 0 ? (
         <div className="flex flex-col items-center py-16 text-gray-400">
-          <svg className="w-12 h-12 mb-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p className="text-sm">위에서 기사를 선택하세요</p>
+          <p className="text-sm">담당 유지관리 학교가 없습니다</p>
         </div>
-      ) : visitLoading ? <Spinner /> : (
-        <>
-          <p className="text-xs text-gray-500 mb-3">유지관리 {managedSchools.length}개교</p>
-
-          {managedSchools.length === 0 ? (
-            <div className="flex flex-col items-center py-16 text-gray-400">
-              <p className="text-sm">담당 유지관리 학교가 없습니다</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto -mx-4">
-              <table className="min-w-max text-xs border-collapse">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[120px] max-w-[160px]">
-                      학교명
-                    </th>
-                    {MONTHS.map(m => (
-                      <th key={m.key}
-                        className={`border border-gray-200 px-2 py-2.5 text-center font-semibold min-w-[52px]
-                          ${m.key === dayjs().format('YYYY-MM') ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
-                      >
-                        {m.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {managedSchools.map((school, idx) => (
-                    <tr key={school.schoolId}>
+      ) : (
+        <div className="overflow-x-auto -mx-4">
+          <table className="min-w-max text-xs border-collapse">
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[120px]">
+                  학교명
+                </th>
+                {MONTHS.map(m => (
+                  <th key={m.key}
+                    className={`border border-gray-200 px-2 py-2.5 text-center font-semibold min-w-[52px]
+                      ${m.key === dayjs().format('YYYY-MM') ? 'bg-blue-50 text-blue-700' : 'bg-gray-50 text-gray-600'}`}
+                  >
+                    {m.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {managedSchools.map((school, idx) => (
+                <tr key={school.schoolId}>
+                  <td
+                    className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
+                      ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                    onClick={() => openSchoolModal(school)}
+                  >
+                    {school.name}
+                  </td>
+                  {MONTHS.map(m => {
+                    const cellVisits = visitMap[school.schoolId]?.[m.key] || []
+                    const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
+                    return (
                       <td
-                        className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
-                          ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                        onClick={() => openSchoolModal(school)}
+                        key={m.key}
+                        className={`border border-gray-200 px-2 py-2.5 text-center cursor-pointer hover:bg-blue-50 transition
+                          ${isCurrentMonth ? 'bg-blue-50/40' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                        onClick={() => setVisitModal({ school, monthKey: m.key, label: m.label, visits: cellVisits })}
                       >
-                        {school.name}
+                        {cellVisits.length > 0 ? (
+                          <span className="text-blue-700 font-semibold">
+                            {cellVisits.map(v => dayjs(v.visitDate).date() + '일').join(', ')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-200">-</span>
+                        )}
                       </td>
-                      {MONTHS.map(m => {
-                        const cellVisits = visitMap[school.schoolId]?.[m.key] || []
-                        const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
-                        return (
-                          <td
-                            key={m.key}
-                            className={`border border-gray-200 px-2 py-2.5 text-center cursor-pointer hover:bg-blue-50 transition
-                              ${isCurrentMonth ? 'bg-blue-50/50' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                            onClick={() => setVisitModal({ school, monthKey: m.key, label: m.label, visits: cellVisits })}
-                          >
-                            {cellVisits.length > 0 ? (
-                              <span className="text-blue-700 font-medium">
-                                {cellVisits.map(v => dayjs(v.visitDate).date() + '일').join(', ')}
-                              </span>
-                            ) : (
-                              <span className="text-gray-200">-</span>
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* ─── 학교 상세 모달 ─── */}
@@ -278,6 +241,7 @@ export default function AdminTechSchedule() {
             </div>
 
             <div className="overflow-y-auto p-5 space-y-5">
+              {/* 기본 정보 */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">기본 정보</p>
                 <InfoRow label="주소" value={schoolModal.address} />
@@ -294,6 +258,7 @@ export default function AdminTechSchedule() {
                 )}
               </div>
 
+              {/* 비고(메모) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-semibold text-gray-500">메모 (비고)</p>
@@ -321,9 +286,10 @@ export default function AdminTechSchedule() {
                 )}
               </div>
 
+              {/* 설치 장비 */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 mb-2">설치 장비</p>
-                {equipLoading ? <div className="py-4"><Spinner /></div> : equipment.length === 0 ? (
+                {equipLoading ? <Spinner /> : equipment.length === 0 ? (
                   <p className="text-xs text-gray-300 py-2">등록된 장비 없음</p>
                 ) : (
                   <div className="space-y-2">
@@ -370,7 +336,16 @@ export default function AdminTechSchedule() {
             <div className="overflow-y-auto p-5">
               {visitModal.visits.length === 0 ? (
                 <div className="py-8 text-center">
-                  <p className="text-sm text-gray-400">이 달에 방문 기록이 없습니다</p>
+                  <p className="text-sm text-gray-400 mb-4">이 달에 방문 기록이 없습니다</p>
+                  <button
+                    onClick={() => {
+                      setVisitModal(null)
+                      navigate('/visit/new', { state: { schoolId: visitModal.school.schoolId } })
+                    }}
+                    className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl"
+                  >
+                    방문 등록
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -388,9 +363,6 @@ export default function AdminTechSchedule() {
                           {v.workContent && (
                             <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{v.workContent}</p>
                           )}
-                          {v.techName && (
-                            <p className="text-xs text-gray-400 mt-0.5">{v.techName} 기사</p>
-                          )}
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           <span className={`text-xs px-2 py-0.5 rounded-full
@@ -404,6 +376,15 @@ export default function AdminTechSchedule() {
                       </div>
                     </button>
                   ))}
+                  <button
+                    onClick={() => {
+                      setVisitModal(null)
+                      navigate('/visit/new', { state: { schoolId: visitModal.school.schoolId } })
+                    }}
+                    className="w-full mt-1 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl"
+                  >
+                    + 방문 추가 등록
+                  </button>
                 </div>
               )}
             </div>

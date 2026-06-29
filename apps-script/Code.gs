@@ -166,10 +166,7 @@ function formatDate(d) {
   if (!d) return '';
   var dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return String(d);
-  var y = dt.getFullYear();
-  var m = String(dt.getMonth() + 1).padStart(2, '0');
-  var day = String(dt.getDate()).padStart(2, '0');
-  return y + '-' + m + '-' + day;
+  return Utilities.formatDate(dt, 'Asia/Seoul', 'yyyy-MM-dd');
 }
 
 function formatTime(t) {
@@ -1447,7 +1444,8 @@ function handleSaveDashcamPhoto(data) {
       var numCols = sheet.getLastColumn();
       var newRow  = [];
       for (var j = 0; j < numCols; j++) newRow.push('');
-      newRow[0] = date;
+      var dp = date.split('-');
+      newRow[0] = new Date(Number(dp[0]), Number(dp[1]) - 1, Number(dp[2]));
       newRow[targetCol] = fileUrl;
       sheet.appendRow(newRow);
     } else {

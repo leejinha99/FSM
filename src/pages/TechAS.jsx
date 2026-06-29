@@ -105,6 +105,7 @@ function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove })
       unitPrice: price,
       qty,
       total: price * qty,
+      isFree: false,
       _userEdited: false,
     })
   }
@@ -124,7 +125,21 @@ function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove })
 
   function handleQtyChange(val) {
     const qty = Number(val) || 0
-    onChange(idx, { ...row, qty, total: (Number(row.unitPrice) || 0) * qty })
+    onChange(idx, { ...row, qty, total: row.isFree ? 0 : (Number(row.unitPrice) || 0) * qty })
+  }
+
+  function handleFreeToggle() {
+    if (row.isFree) {
+      const specData = selectedPart?.specs?.find(s => s.spec === row.spec)
+      const price = specData
+        ? (isContracted ? (specData.contractPrice || 0) : (specData.nonContractPrice || 0))
+        : selectedPart
+          ? (isContracted ? (selectedPart.contractPrice || 0) : (selectedPart.nonContractPrice || 0))
+          : 0
+      onChange(idx, { ...row, isFree: false, unitPrice: price, total: price * (Number(row.qty) || 1), _userEdited: false })
+    } else {
+      onChange(idx, { ...row, isFree: true, unitPrice: 0, total: 0 })
+    }
   }
 
   return (
@@ -207,16 +222,28 @@ function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove })
       {/* Row 2: 비용 + 수량 */}
       <div className="flex gap-2">
         <div className="flex-1">
-          <label className="text-xs text-gray-500 mb-0.5 block">
-            비용{row.partId && !row._userEdited && <span className="ml-1 text-blue-400">(자동)</span>}
+          <label className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+            비용
+            {row.partId && !row._userEdited && !row.isFree && <span className="text-blue-400">(자동)</span>}
+            <button
+              type="button"
+              onClick={handleFreeToggle}
+              className={`ml-auto px-2 py-0.5 rounded-full text-xs font-medium border transition
+                ${row.isFree
+                  ? 'bg-green-500 text-white border-green-500'
+                  : 'bg-white text-gray-400 border-gray-300 hover:border-green-400 hover:text-green-500'}`}
+            >
+              무상
+            </button>
           </label>
           <input
             type="number"
             value={row.unitPrice}
             onChange={e => handlePriceChange(e.target.value)}
-            className={INPUT}
+            className={`${INPUT} ${row.isFree ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}`}
             placeholder="0"
             min="0"
+            disabled={row.isFree}
           />
         </div>
         <div className="flex-1">
@@ -235,7 +262,12 @@ function PartSearchRow({ idx, row, allParts, isContracted, onChange, onRemove })
       {/* Row 3: 합계 */}
       <div className="flex items-center justify-between py-1 border-t border-gray-100">
         <span className="text-xs text-gray-500">합계</span>
-        <span className="text-sm font-bold text-gray-800">{total.toLocaleString()}원</span>
+        <div className="flex items-center gap-1.5">
+          {row.isFree && <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full">무상</span>}
+          <span className={`text-sm font-bold ${row.isFree ? 'text-green-600' : 'text-gray-800'}`}>
+            {total.toLocaleString()}원
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -254,7 +286,7 @@ function PaymentModal({ ticket, onSave, onClose }) {
   const [movePrice, setMovePrice]     = useState('')
   const [moveQty, setMoveQty]         = useState('')
   const [showPayConfirm, setShowPayConfirm] = useState(false)
-  const [partRows, setPartRows] = useState([{ partId: '', partName: '', spec: '', unitPrice: 0, qty: 1, total: 0, _userEdited: false }])
+  const [partRows, setPartRows] = useState([{ partId: '', partName: '', spec: '', unitPrice: 0, qty: 1, total: 0, isFree: false, _userEdited: false }])
   const [allParts, setAllParts] = useState([])
   const [paymentMethod, setPaymentMethod] = useState('카드')
   const [bizNumber, setBizNumber]   = useState(ticket.bizNumber || '')
@@ -383,7 +415,7 @@ function PaymentModal({ ticket, onSave, onClose }) {
             ))}
             <button
               type="button"
-              onClick={() => setPartRows(r => [...r, { partId: '', partName: '', spec: '', unitPrice: 0, qty: 1, total: 0, _userEdited: false }])}
+              onClick={() => setPartRows(r => [...r, { partId: '', partName: '', spec: '', unitPrice: 0, qty: 1, total: 0, isFree: false, _userEdited: false }])}
               className="w-full py-2 border border-dashed border-blue-300 rounded-xl text-xs text-blue-500 font-medium"
             >
               + 부품 추가

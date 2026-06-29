@@ -48,6 +48,8 @@ function doPost(e) {
       case 'sendEstimate':    result = handleSendEstimate(data);    break;
       case 'saveEstimate':   result = handleSaveEstimate(data);   break;
       case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
+      case 'getDashcamPhotos':  result = handleGetDashcamPhotos(data);  break;
+      case 'saveDashcamPhoto':  result = handleSaveDashcamPhoto(data);  break;
       default:
         throw new Error('알 수 없는 액션: ' + action);
     }
@@ -92,6 +94,7 @@ function doGet(e) {
         case 'sendEstimate':    result = handleSendEstimate(data);   break;
         case 'saveEstimate':   result = handleSaveEstimate(data);   break;
         case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
+        case 'getDashcamPhotos': result = handleGetDashcamPhotos(data); break;
         default:
           throw new Error('알 수 없는 액션: ' + action);
       }
@@ -1292,7 +1295,124 @@ function handleSaveEstimate(data) {
   }
 }
 
-// 웰라수 창고(중앙 창고) 재고 조회
+// ── 차량계기판 핸들러 ──────────────────────────────────────────────────────
+
+var DASHCAM_FOLDER_IDS = {
+  '박정현': '1LQT_vJIBDtpFq-vEjrkhWYMXwivOv7kR',
+  '김성준': '1LpGxSOYGZoW31z7-Eg9Q4bB79AinJncS',
+  '박경록': '10nOKb0LJfB7kRHeKjMdKHMjsTK47EXkB',
+};
+
+var DASHCAM_TECHS = ['박정현', '김성준', '박경록'];
+
+function ensureDashcamSheet() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName('차량계기판');
+  if (!sheet) {
+    sheet = ss.insertSheet('차량계기판');
+    var headers = ['날짜'];
+    DASHCAM_TECHS.forEach(function(name) {
+      headers.push(name + ' 출근');
+      headers.push(name + ' 퇴근');
+    });
+    sheet.appendRow(headers);
+  }
+  return sheet;
+}
+
+function getDashcamColMap(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return {};
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var map = {};
+  headers.forEach(function(h, i) { map[String(h).trim()] = i; });
+  return map;
+}
+
+function handleGetDashcamPhotos(data) {
+  var sheet = ensureDashcamSheet();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+
+  var colMap = getDashcamColMap(sheet);
+  var techName = String(data.techName || '');
+  var year     = data.year  ? String(data.year)  : null;
+  var month    = data.month ? String(data.month).padStart(2, '0') : null;
+
+  var commuteCol = colMap[techName + ' 출근'];
+  var leaveCol   = colMap[techName + ' 퇴근'];
+
+  var rows = sheet.getRange(1, 1, lastRow, sheet.getLastColumn()).getValues();
+  var result = [];
+
+  for (var i = 1; i < rows.length; i++) {
+    var row     = rows[i];
+    var dateStr = formatDate(row[0]);
+    if (!dateStr) continue;
+    if (year  && !dateStr.startsWith(year)) continue;
+    if (year && month && !dateStr.startsWith(year + '-' + month)) continue;
+
+    result.push({
+      date:    dateStr,
+      commute: (typeof commuteCol !== 'undefined' ? String(row[commuteCol] || '') : ''),
+      leave:   (typeof leaveCol   !== 'undefined' ? String(row[leaveCol]   || '') : ''),
+    });
+  }
+  return result;
+}
+
+function handleSaveDashcamPhoto(data) {
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch(e) { throw new Error('잠시 후 다시 시도해주세요.'); }
+  try {
+    var techName = String(data.techName || '');
+    var folderId = DASHCAM_FOLDER_IDS[techName];
+    if (!folderId) throw new Error('폴더를 찾을 수 없습니다: ' + techName);
+
+    // 이미지 → Drive 저장
+    var decoded  = Utilities.base64Decode(data.base64Image);
+    var blob     = Utilities.newBlob(decoded, data.mimeType || 'image/jpeg', data.timestamp + '.jpg');
+    var folder   = DriveApp.getFolderById(folderId);
+    var file     = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var fileUrl  = 'https://drive.google.com/file/d/' + file.getId() + '/view';
+
+    // 차량계기판 시트에 URL 기록
+    var sheet    = ensureDashcamSheet();
+    var colMap   = getDashcamColMap(sheet);
+    var colKey   = techName + ' ' + String(data.type || '출근');
+    var targetCol = colMap[colKey];
+    if (typeof targetCol === 'undefined') throw new Error('컬럼을 찾을 수 없습니다: ' + colKey);
+
+    var date    = String(data.date || '');
+    var lastRow = sheet.getLastRow();
+    var rowIndex = -1;
+
+    if (lastRow > 1) {
+      var dateVals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < dateVals.length; i++) {
+        if (formatDate(dateVals[i][0]) === date) { rowIndex = i + 2; break; }
+      }
+    }
+
+    if (rowIndex === -1) {
+      var numCols = sheet.getLastColumn();
+      var newRow  = [];
+      for (var j = 0; j < numCols; j++) newRow.push('');
+      newRow[0] = date;
+      newRow[targetCol] = fileUrl;
+      sheet.appendRow(newRow);
+    } else {
+      sheet.getRange(rowIndex, targetCol + 1).setValue(fileUrl);
+    }
+
+    return { url: fileUrl };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── 웰라수 창고(중앙 창고) 재고 조회
 function handleGetCentralWarehouseStock(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
 

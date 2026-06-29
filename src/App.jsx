@@ -17,6 +17,7 @@ import AdminAS from './pages/admin/AdminAS.jsx'
 import AdminTechSchedule from './pages/admin/AdminTechSchedule.jsx'
 import AdminStock from './pages/admin/AdminStock.jsx'
 import TechManaged from './pages/TechManaged.jsx'
+import TechVehicle from './pages/TechVehicle.jsx'
 
 function RequireAuth({ children, requiredRole }) {
   const { user } = useAuth()
@@ -49,6 +50,7 @@ export default function App() {
               <Route path="/stock" element={<TechStock />} />
               <Route path="/as" element={<TechAS />} />
               <Route path="/managed" element={<TechManaged />} />
+              <Route path="/vehicle" element={<TechVehicle />} />
             </Route>
             <Route path="/visit/new" element={<RequireAuth><VisitRegister /></RequireAuth>} />
             <Route path="/visit/edit/:visitId" element={<RequireAuth><VisitEdit /></RequireAuth>} />

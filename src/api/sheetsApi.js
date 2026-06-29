@@ -27,13 +27,13 @@ function cacheDeleteByPrefix(prefix) {
 
 // ─── 실제 API 호출 ─────────────────────────────────────────────────────────
 
-async function callApi(action, data = {}) {
+async function callApi(action, data = {}, timeoutMs = 20000) {
   if (!navigator.onLine) {
     throw new Error('네트워크 연결을 확인해주세요.')
   }
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 20000)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -503,6 +503,22 @@ export const api = {
     cacheDeleteByPrefix('getStockMoves_')
     _cache.delete('getCentralWarehouseStock')
     return result
+  },
+
+  async getDashcamPhotos(techName, year, month) {
+    if (MOCK_MODE) {
+      await mockDelay(300)
+      return []
+    }
+    return callApi('getDashcamPhotos', { techName, year, month })
+  },
+
+  async saveDashcamPhoto(data) {
+    if (MOCK_MODE) {
+      await mockDelay(1000)
+      return { url: 'https://drive.google.com/mock' }
+    }
+    return callApi('saveDashcamPhoto', data, 60000)
   },
 
   async getStockMoves({ techId, warehouseId, year, month } = {}) {

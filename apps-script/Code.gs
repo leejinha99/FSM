@@ -1432,7 +1432,11 @@ function handleSaveDashcamPhoto(data) {
     var targetCol = colMap[colKey];
     if (typeof targetCol === 'undefined') throw new Error('컬럼을 찾을 수 없습니다: ' + colKey);
 
-    var date    = formatDate(new Date());
+    // data.timestamp 예시: '2026.06.29 14:30' → '2026-06-29'
+    var tsParts = String(data.timestamp || '').split(' ')[0].split('.');
+    var date    = (tsParts.length === 3)
+      ? tsParts[0] + '-' + tsParts[1] + '-' + tsParts[2]
+      : formatDate(new Date());
     var lastRow = sheet.getLastRow();
     var rowIndex = -1;
 

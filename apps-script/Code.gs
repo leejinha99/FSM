@@ -1448,15 +1448,9 @@ function handleSaveDashcamPhoto(data) {
     }
 
     if (rowIndex === -1) {
-      var numCols    = sheet.getLastColumn();
       var nextRowNum = lastRow + 1;
-      // 날짜 셀을 텍스트 서식으로 먼저 지정 후 flush → 자동 날짜 변환 완전 차단
-      sheet.getRange(nextRowNum, 1).setNumberFormat('@');
-      SpreadsheetApp.flush();
-      var newRow = new Array(numCols).fill('');
-      newRow[0]         = date;
-      newRow[targetCol] = fileUrl;
-      sheet.getRange(nextRowNum, 1, 1, numCols).setValues([newRow]);
+      sheet.getRange(nextRowNum, 1).setFormula('="' + date + '"');
+      sheet.getRange(nextRowNum, targetCol + 1).setValue(fileUrl);
     } else {
       sheet.getRange(rowIndex, targetCol + 1).setValue(fileUrl);
     }

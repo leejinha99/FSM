@@ -132,6 +132,8 @@ export default function AdminTechSchedule() {
   const [noteEditing, setNoteEditing] = useState(false)
   const [noteSaving, setNoteSaving] = useState(false)
   const [visitModal, setVisitModal] = useState(null)
+  const [dayFilterMonth, setDayFilterMonth] = useState('')
+  const [dayFilterDay, setDayFilterDay] = useState('')
 
   const MONTHS = useMemo(() => getMonths(selectedYear), [selectedYear])
 
@@ -221,6 +223,18 @@ export default function AdminTechSchedule() {
     })
     return grouped
   }, [allVisits])
+
+  const filteredVisitsByDate = useMemo(() => {
+    if (!dayFilterMonth && !dayFilterDay) return visitsByDate
+    const filtered = {}
+    Object.keys(visitsByDate).forEach(dateStr => {
+      const d = dayjs(dateStr)
+      if (dayFilterMonth && d.month() + 1 !== Number(dayFilterMonth)) return
+      if (dayFilterDay && d.date() !== Number(dayFilterDay)) return
+      filtered[dateStr] = visitsByDate[dateStr]
+    })
+    return filtered
+  }, [visitsByDate, dayFilterMonth, dayFilterDay])
 
   async function openSchoolModal(school) {
     setSchoolModal(school)
@@ -336,20 +350,16 @@ export default function AdminTechSchedule() {
       {viewMode === '지역별' && (
         <>
           <div className="mb-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            <select
+              value={selectedRegion}
+              onChange={e => setSelectedRegion(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">지역 선택</option>
               {regions.map(r => (
-                <button
-                  key={r}
-                  onClick={() => setSelectedRegion(r)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition
-                    ${selectedRegion === r
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-gray-200 text-gray-600 active:bg-gray-50'}`}
-                >
-                  {r}
-                </button>
+                <option key={r} value={r}>{r}</option>
               ))}
-            </div>
+            </select>
           </div>
 
           {!selectedRegion ? (
@@ -379,15 +389,38 @@ export default function AdminTechSchedule() {
 
       {/* ─── 일별 뷰 ─── */}
       {viewMode === '일별' && (
-        allVisitsLoading ? <Spinner /> : (
+        <>
+          <div className="flex gap-2 mb-4">
+            <select
+              value={dayFilterMonth}
+              onChange={e => { setDayFilterMonth(e.target.value); setDayFilterDay('') }}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">전체 월</option>
+              {MONTHS.map(m => (
+                <option key={m.key} value={String(m.month)}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              value={dayFilterDay}
+              onChange={e => setDayFilterDay(e.target.value)}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">전체 일</option>
+              {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                <option key={d} value={String(d)}>{d}일</option>
+              ))}
+            </select>
+          </div>
+          {allVisitsLoading ? <Spinner /> : (
           <div className="space-y-5">
-            {Object.keys(visitsByDate).length === 0 ? (
+            {Object.keys(filteredVisitsByDate).length === 0 ? (
               <div className="flex flex-col items-center py-16 text-gray-400">
-                <p className="text-sm">해당 학년도에 방문 기록이 없습니다</p>
+                <p className="text-sm">해당 조건에 방문 기록이 없습니다</p>
               </div>
-            ) : Object.keys(visitsByDate).sort().map(dateStr => {
+            ) : Object.keys(filteredVisitsByDate).sort().map(dateStr => {
               const day = dayjs(dateStr)
-              const items = [...visitsByDate[dateStr]].sort((a, b) =>
+              const items = [...filteredVisitsByDate[dateStr]].sort((a, b) =>
                 (a.visitTime || '').localeCompare(b.visitTime || '')
               )
               const isToday = dateStr === dayjs().format('YYYY-MM-DD')
@@ -424,7 +457,8 @@ export default function AdminTechSchedule() {
               )
             })}
           </div>
-        )
+        )}
+      </>
       )}
 
       {/* ─── 학교 상세 모달 ─── */}

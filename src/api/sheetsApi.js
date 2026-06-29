@@ -164,12 +164,12 @@ export const api = {
     return callApiCached('getMyVisits', { techId, start, end }, `getMyVisits_${techId}_${start}_${end}`)
   },
 
-  async getMySchools(techId) {
+  async getMySchools(techId, year) {
     if (MOCK_MODE) {
       await mockDelay(200)
       return MOCK.schools.filter(s => s.techId === techId)
     }
-    return callApiCached('getMySchools', { techId }, `getMySchools_${techId}`)
+    return callApiCached('getMySchools', { techId, year }, `getMySchools_${techId}_${year || ''}`)
   },
 
   async getEquipment(schoolId) {
@@ -239,9 +239,9 @@ export const api = {
 
   // ─── 관리자 전용 ────────────────────────────────────────────────────────────
 
-  async getAllSchools() {
+  async getAllSchools(year) {
     if (MOCK_MODE) { await mockDelay(); return [...MOCK.schools] }
-    return callApiCached('getAllSchools', {}, 'getAllSchools')
+    return callApiCached('getAllSchools', { year }, `getAllSchools_${year || ''}`)
   },
 
   async getAllTechs() {
@@ -282,7 +282,7 @@ export const api = {
       return { success: true }
     }
     const result = await callApi('saveSchool', data)
-    _cache.delete('getAllSchools')
+    cacheDeleteByPrefix('getAllSchools_')
     cacheDeleteByPrefix('getMySchools_')
     return result
   },
@@ -536,11 +536,12 @@ export function prefetchForUser(user) {
 
   if (user.role === '기사') {
     callApiCached('getMyVisits', { techId: user.techId, start, end }, `getMyVisits_${user.techId}_${start}_${end}`)
-    callApiCached('getMySchools', { techId: user.techId }, `getMySchools_${user.techId}`)
+    const defaultYear = (new Date().getMonth() + 1) >= 3 ? new Date().getFullYear() : new Date().getFullYear() - 1
+    callApiCached('getMySchools', { techId: user.techId, year: defaultYear }, `getMySchools_${user.techId}_${defaultYear}`)
     callApiCached('getMyParts', { techId: user.techId }, `getMyParts_${user.techId}`)
     callApiCached('getMyAS', { techId: user.techId }, `getMyAS_${user.techId}`)
   } else {
-    callApiCached('getAllSchools', {}, 'getAllSchools')
+    callApiCached('getAllSchools', {}, 'getAllSchools_')
     callApiCached('getAllTechs', {}, 'getAllTechs')
     callApiCached('getAllAS', {}, 'getAllAS')
     callApiCached('getAllVisits', { start, end, techId: null }, `getAllVisits_${start}_${end}_`)

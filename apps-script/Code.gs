@@ -123,6 +123,21 @@ function getSheet(name) {
   return SpreadsheetApp.openById(SHEET_ID).getSheetByName(name);
 }
 
+// 관리년도 계산 (3월~다음해 2월 = 같은 관리년도)
+function getCurrentMgmtYear() {
+  var now = new Date();
+  var month = now.getMonth() + 1;
+  var year = now.getFullYear();
+  return month >= 3 ? year : year - 1;
+}
+
+// 연도별 학교 시트 접근: 학교[2026] 없으면 학교 fallback
+function getSchoolSheet(year) {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var named = ss.getSheetByName('학교[' + year + ']');
+  return named || ss.getSheetByName('학교');
+}
+
 function sheetToObjects(sheet) {
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
@@ -195,14 +210,15 @@ function handleLogin(data) {
 // 결제방식 | 결제금액 | 발행상태 | 통장사본발송여부 | 상태 | 연결ASID
 function handleGetMyVisits(data) {
   var visitSheet  = getSheet('방문기록');
-  var schoolSheet = getSheet('학교');
+  var year = data.year || getCurrentMgmtYear();
+  var schoolSheet = getSchoolSheet(year);
 
   var schoolMap = {};
   var sRows = schoolSheet.getDataRange().getValues();
   for (var si = 1; si < sRows.length; si++) {
     schoolMap[String(sRows[si][0])] = {
-      name:         String(sRows[si][1]),
-      contractType: String(sRows[si][7] || ''),
+      name:         String(sRows[si][5]),
+      contractType: String(sRows[si][9] || ''),
     };
   }
 
@@ -240,36 +256,38 @@ function handleGetMyVisits(data) {
 }
 
 // 학교 시트 컬럼 순서:
-// 학교ID | 학교명 | 지역 | 주소 | 담당자 | 담당자연락처 | 담당기사ID |
-// 계약구분 | 학교이메일 | 사업자등록증링크 | 비고
+// 학교ID(0)|담당기사ID(1)|담당자(2)|계약자(3)|지역(4)|학교명(5)|주소(6)|
+// 담당자연락처(7)|학교이메일(8)|계약구분(9)|사업자번호(10)|사업자등록증링크(11)|비고(12)
 function handleGetMySchools(data) {
-  var rows = getSheet('학교').getDataRange().getValues();
+  var year = data.year || getCurrentMgmtYear();
+  var rows = getSchoolSheet(year).getDataRange().getValues();
   if (rows.length < 2) return [];
 
   var result = [];
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    if (String(r[6]) !== data.techId) continue;
+    if (String(r[1]) !== data.techId) continue;
     result.push({
       schoolId:            String(r[0]),
-      name:                String(r[1]),
-      region:              String(r[2]),
-      address:             String(r[3]),
-      contact:             String(r[4]),
-      contactPhone:        String(r[5]),
-      techId:              String(r[6]),
-      contractType:        String(r[7]),
+      techId:              String(r[1]),
+      contact:             String(r[2]),
+      region:              String(r[4]),
+      name:                String(r[5]),
+      address:             String(r[6]),
+      contactPhone:        String(r[7]),
       email:               String(r[8]),
-      bizRegistrationLink: String(r[9]  || ''),
-      note:                String(r[10] || ''),
-      bizNumber:           String(r[11] || ''),
+      contractType:        String(r[9]),
+      bizNumber:           String(r[10] || ''),
+      bizRegistrationLink: String(r[11] || ''),
+      note:                String(r[12] || ''),
     });
   }
   return result;
 }
 
 // 설치장비 시트 컬럼 순서:
-// 장비ID(0) | 학교ID(1) | 학교명(2) | 설치위치(3) | 모델명(4) | 설치일(5) | 필터교체주기(6) | 상태(7)
+// 장비ID(0)|학교ID(1)|학교명(2)|설치위치(3)|모델명(4)|설치대수(5)|설치일자(6)|
+// 계약구분(7)|임대/무상기간(8)|면제달(9)|필터교체주기(10)|비고(11)
 function handleGetEquipment(data) {
   var rows = getSheet('설치장비').getDataRange().getValues();
   if (rows.length < 2) return [];
@@ -284,9 +302,9 @@ function handleGetEquipment(data) {
       schoolName:     String(r[2] || ''),
       location:       String(r[3]),
       model:          String(r[4]),
-      installDate:    formatDate(r[5]),
-      filterInterval: Number(r[6]) || 6,
-      status:         String(r[7]),
+      installDate:    formatDate(r[6]),
+      filterInterval: Number(r[10]) || 6,
+      status:         String(r[7] || ''),
     });
   }
   return result;
@@ -453,18 +471,20 @@ function handleSaveVisit(data) {
     var today   = formatDate(new Date());
 
     // ── 미계약 설치: 학교명 직접입력이면 학교 신규 생성 ──────
+    // 학교 시트 컬럼: 학교ID(0)|담당기사ID(1)|담당자(2)|계약자(3)|지역(4)|학교명(5)|주소(6)|담당자연락처(7)|학교이메일(8)|계약구분(9)|사업자번호(10)|사업자등록증링크(11)|비고(12)
     var resolvedSchoolId = data.schoolId || '';
     if (data.visitType === '설치' && !resolvedSchoolId && data.schoolNameManual) {
-      var schoolSheet2 = ss.getSheetByName('학교');
+      var schoolSheet2 = getSchoolSheet(getCurrentMgmtYear());
       var newSchoolId = makeId('S');
       schoolSheet2.appendRow([
         newSchoolId,
-        data.schoolNameManual,
-        data.regionManual || '',
-        '', '', '',
         data.techId || '',
+        '', '',
+        data.regionManual || '',
+        data.schoolNameManual,
+        '', '', '',
         '비계약',
-        '', '', '', '',
+        '', '', '',
       ]);
       resolvedSchoolId = newSchoolId;
     }
@@ -475,21 +495,26 @@ function handleSaveVisit(data) {
       var eqId = makeId('E');
       var schoolNameForEq = data.newEquipment.schoolName || data.schoolNameManual || '';
       if (!schoolNameForEq && resolvedSchoolId) {
-        var schoolSheet = ss.getSheetByName('학교');
+        var schoolSheet = getSchoolSheet(getCurrentMgmtYear());
         var sRows = schoolSheet.getDataRange().getValues();
         for (var si = 1; si < sRows.length; si++) {
-          if (String(sRows[si][0]) === resolvedSchoolId) { schoolNameForEq = String(sRows[si][1]); break; }
+          if (String(sRows[si][0]) === resolvedSchoolId) { schoolNameForEq = String(sRows[si][5]); break; }
         }
       }
+      // 설치장비 시트: 장비ID(0)|학교ID(1)|학교명(2)|설치위치(3)|모델명(4)|설치대수(5)|설치일자(6)|계약구분(7)|임대/무상기간(8)|면제달(9)|필터교체주기(10)|비고(11)
       eqSheet.appendRow([
         eqId,                                      // 0: 장비ID
         resolvedSchoolId,                          // 1: 학교ID
         schoolNameForEq,                           // 2: 학교명
         data.newEquipment.location || '',          // 3: 설치위치
         data.newEquipment.model    || '',          // 4: 모델명
-        data.newEquipment.installDate || today,    // 5: 설치일
-        data.newEquipment.filterInterval || 6,     // 6: 필터교체주기
-        '정상',                                    // 7: 상태
+        1,                                         // 5: 설치대수
+        data.newEquipment.installDate || today,    // 6: 설치일자
+        '',                                        // 7: 계약구분
+        '',                                        // 8: 임대/무상기간
+        '',                                        // 9: 면제달
+        data.newEquipment.filterInterval || 6,     // 10: 필터교체주기
+        '',                                        // 11: 비고
       ]);
     }
 
@@ -574,26 +599,27 @@ function handleSaveVisit(data) {
 // ────────────────────────────────────────────────────────────
 
 // 학교 전체 조회
-// 학교 시트: 학교ID(0)|학교명(1)|지역(2)|주소(3)|담당자(4)|담당자연락처(5)|담당기사ID(6)|계약구분(7)|학교이메일(8)|사업자등록증링크(9)|비고(10)|사업자번호(11)
+// 학교 시트: 학교ID(0)|담당기사ID(1)|담당자(2)|계약자(3)|지역(4)|학교명(5)|주소(6)|담당자연락처(7)|학교이메일(8)|계약구분(9)|사업자번호(10)|사업자등록증링크(11)|비고(12)
 function handleGetAllSchools(data) {
-  var rows = getSheet('학교').getDataRange().getValues();
+  var year = data.year || getCurrentMgmtYear();
+  var rows = getSchoolSheet(year).getDataRange().getValues();
   if (rows.length < 2) return [];
   var result = [];
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
     result.push({
       schoolId:            String(r[0]),
-      name:                String(r[1]),
-      region:              String(r[2]),
-      address:             String(r[3]),
-      contact:             String(r[4]),
-      contactPhone:        String(r[5]),
-      techId:              String(r[6]),
-      contractType:        String(r[7]),
+      techId:              String(r[1]),
+      contact:             String(r[2]),
+      region:              String(r[4]),
+      name:                String(r[5]),
+      address:             String(r[6]),
+      contactPhone:        String(r[7]),
       email:               String(r[8]),
-      bizRegistrationLink: String(r[9]  || ''),
-      note:                String(r[10] || ''),
-      bizNumber:           String(r[11] || ''),
+      contractType:        String(r[9]),
+      bizNumber:           String(r[10] || ''),
+      bizRegistrationLink: String(r[11] || ''),
+      note:                String(r[12] || ''),
     });
   }
   return result;
@@ -623,8 +649,9 @@ function handleGetAllTechs(data) {
 // 방문기록 전체 조회 (관리자용)
 function handleGetAllVisits(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
+  var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
-  sheetToObjects(ss.getSheetByName('학교')).forEach(function(s) {
+  sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
     schoolMap[s['학교ID']] = s['학교명'];
   });
   var techMap = {};
@@ -664,8 +691,9 @@ function handleGetAllVisits(data) {
 // AS접수 전체 조회
 function handleGetAllAS(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
+  var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
-  sheetToObjects(ss.getSheetByName('학교')).forEach(function(s) {
+  sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
     schoolMap[s['학교ID']] = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
   });
   var techMap = {};
@@ -713,26 +741,29 @@ function handleGetAllAS(data) {
 }
 
 // 학교 저장 (추가/수정)
+// 새 컬럼: 학교ID(0)|담당기사ID(1)|담당자(2)|계약자(3)|지역(4)|학교명(5)|주소(6)|담당자연락처(7)|학교이메일(8)|계약구분(9)|사업자번호(10)|사업자등록증링크(11)|비고(12)
 function handleSaveSchool(data) {
-  var sheet = getSheet('학교');
+  var year = data.year || getCurrentMgmtYear();
+  var sheet = getSchoolSheet(year);
   var rows = sheet.getDataRange().getValues();
 
   if (data.schoolId) {
     for (var i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === data.schoolId) {
-        sheet.getRange(i + 1, 1, 1, 12).setValues([[
+        sheet.getRange(i + 1, 1, 1, 13).setValues([[
           data.schoolId,
-          data.name         || '',
-          data.region       || '',
-          data.address      || '',
-          data.contact      || '',
-          data.contactPhone || '',
           data.techId       || '',
-          data.contractType || '',
+          data.contact      || '',
+          rows[i][3],
+          data.region       || '',
+          data.name         || '',
+          data.address      || '',
+          data.contactPhone || '',
           data.email        || '',
-          rows[i][9],
-          data.note         || '',
+          data.contractType || '',
           data.bizNumber    || '',
+          rows[i][11],
+          data.note         || '',
         ]]);
         return { schoolId: data.schoolId };
       }
@@ -742,17 +773,18 @@ function handleSaveSchool(data) {
   var schoolId = makeId('S');
   sheet.appendRow([
     schoolId,
-    data.name         || '',
-    data.region       || '',
-    data.address      || '',
-    data.contact      || '',
-    data.contactPhone || '',
     data.techId       || '',
-    data.contractType || '유지관리',
+    data.contact      || '',
+    '',
+    data.region       || '',
+    data.name         || '',
+    data.address      || '',
+    data.contactPhone || '',
     data.email        || '',
+    data.contractType || '유지관리',
+    data.bizNumber    || '',
     '',
     data.note         || '',
-    data.bizNumber    || '',
   ]);
   return { schoolId: schoolId };
 }
@@ -799,8 +831,9 @@ function handleSaveTech(data) {
 // |결제방법(10)|결제정보JSON(11)|발행완료여부(12)|학교명직접입력(13)
 function handleGetMyAS(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
+  var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
-  sheetToObjects(ss.getSheetByName('학교')).forEach(function(s) {
+  sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
     schoolMap[s['학교ID']] = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
   });
 
@@ -953,12 +986,13 @@ function handleSaveASPayment(data) {
       sheet.getRange(row, 13).setValue(false);
 
       // 세금계산서 이메일/사업자번호 학교 시트에도 저장
+      // 사업자번호=col10(0-based)=col11(1-based), 이메일=col8(0-based)=col9(1-based)
       if (data.schoolId && data.paymentMethod === '세금계산서') {
-        var schoolSheet = getSheet('학교');
+        var schoolSheet = getSchoolSheet(getCurrentMgmtYear());
         var sRows = schoolSheet.getDataRange().getValues();
         for (var j = 1; j < sRows.length; j++) {
           if (String(sRows[j][0]) !== data.schoolId) continue;
-          if (data.bizNumber) schoolSheet.getRange(j + 1, 12).setValue(data.bizNumber);
+          if (data.bizNumber) schoolSheet.getRange(j + 1, 11).setValue(data.bizNumber);
           if (data.email)     schoolSheet.getRange(j + 1, 9).setValue(data.email);
           break;
         }
@@ -969,12 +1003,12 @@ function handleSaveASPayment(data) {
       if (paymentSheet) {
         var pi = data.paymentInfo || {};
         var asRow = rows[i];
-        var schoolSheet3 = ss.getSheetByName('학교');
+        var schoolSheet3 = getSchoolSheet(getCurrentMgmtYear());
         var sRows3 = schoolSheet3.getDataRange().getValues();
         var schoolName3 = String(asRow[13] || '');
         if (!schoolName3) {
           for (var k = 1; k < sRows3.length; k++) {
-            if (String(sRows3[k][0]) === String(asRow[1])) { schoolName3 = String(sRows3[k][1]); break; }
+            if (String(sRows3[k][0]) === String(asRow[1])) { schoolName3 = String(sRows3[k][5]); break; }
           }
         }
         var repairDesc = pi.repairNote || String(asRow[6] || '');
@@ -1029,8 +1063,9 @@ function handleCompleteInvoice(data) {
 // 세금계산서 발행 대기 목록 조회 (관리자)
 function handleGetASInvoices(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
+  var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
-  sheetToObjects(ss.getSheetByName('학교')).forEach(function(s) {
+  sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
     schoolMap[s['학교ID']] = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
   });
   var techMap = {};
@@ -1217,7 +1252,7 @@ function handleSaveEstimate(data) {
       asSheet.getRange(i + 1, 15).setValue(true);
       // 학교 이메일 업데이트 (없었다가 새로 입력한 경우)
       if (data.schoolId && data.schoolEmail) {
-        var schoolSheet = ss.getSheetByName('학교');
+        var schoolSheet = getSchoolSheet(getCurrentMgmtYear());
         var sRows = schoolSheet.getDataRange().getValues();
         for (var j = 1; j < sRows.length; j++) {
           if (String(sRows[j][0]) === data.schoolId) {

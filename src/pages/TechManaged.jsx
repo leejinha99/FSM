@@ -73,11 +73,12 @@ export default function TechManaged() {
 
   useEffect(() => {
     if (!user?.techId) return
-    api.getMySchools(user.techId)
+    setLoading(true)
+    api.getMySchools(user.techId, selectedYear)
       .then(setSchools)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [user?.techId])
+  }, [user?.techId, selectedYear])
 
   useEffect(() => {
     if (!user?.techId) return

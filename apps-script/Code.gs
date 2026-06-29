@@ -48,8 +48,9 @@ function doPost(e) {
       case 'sendEstimate':    result = handleSendEstimate(data);    break;
       case 'saveEstimate':   result = handleSaveEstimate(data);   break;
       case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
-      case 'getDashcamPhotos':  result = handleGetDashcamPhotos(data);  break;
-      case 'saveDashcamPhoto':  result = handleSaveDashcamPhoto(data);  break;
+      case 'getDashcamPhotos':     result = handleGetDashcamPhotos(data);     break;
+      case 'saveDashcamPhoto':     result = handleSaveDashcamPhoto(data);     break;
+      case 'getAllEquipmentStats': result = handleGetAllEquipmentStats(data); break;
       default:
         throw new Error('알 수 없는 액션: ' + action);
     }
@@ -94,7 +95,8 @@ function doGet(e) {
         case 'sendEstimate':    result = handleSendEstimate(data);   break;
         case 'saveEstimate':   result = handleSaveEstimate(data);   break;
         case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
-        case 'getDashcamPhotos': result = handleGetDashcamPhotos(data); break;
+        case 'getDashcamPhotos':     result = handleGetDashcamPhotos(data);     break;
+        case 'getAllEquipmentStats': result = handleGetAllEquipmentStats(data); break;
         default:
           throw new Error('알 수 없는 액션: ' + action);
       }
@@ -274,6 +276,7 @@ function handleGetMySchools(data) {
       schoolId:            String(r[0]),
       techId:              String(r[1]),
       contact:             String(r[2]),
+      contractor:          String(r[3] || ''),
       region:              String(r[4]),
       name:                String(r[5]),
       address:             String(r[6]),
@@ -298,19 +301,63 @@ function handleGetEquipment(data) {
   var result = [];
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    if (String(r[1]) !== data.schoolId) continue;
+    var rowSchoolId   = String(r[1]);
+    var rowSchoolName = String(r[2] || '');
+    // schoolId 또는 schoolName 으로 필터 (설치장비 시트 학교ID 컬럼이 이름인 경우 대비)
+    var matches = (rowSchoolId === data.schoolId) ||
+                  (data.schoolName && rowSchoolName === data.schoolName);
+    if (!matches) continue;
     result.push({
       equipmentId:    String(r[0]),
-      schoolId:       String(r[1]),
-      schoolName:     String(r[2] || ''),
+      schoolId:       rowSchoolId,
+      schoolName:     rowSchoolName,
       location:       String(r[3]),
       model:          String(r[4]),
+      installCount:   Number(r[5]) || 1,
       installDate:    formatDate(r[6]),
+      contractType:   String(r[7] || ''),
+      leasePeriod:    String(r[8] || ''),
+      exemptMonth:    String(r[9] || ''),
       filterInterval: Number(r[10]) || 6,
-      status:         String(r[7] || ''),
+      note:           String(r[11] || ''),
     });
   }
   return result;
+}
+
+// 학교별 설치 통계 (설치대수 합계 + 면제달)
+function handleGetAllEquipmentStats(data) {
+  var year = data.year || getCurrentMgmtYear();
+  var schoolRows = getSchoolSheet(year).getDataRange().getValues();
+  // 학교명 → 학교ID 맵 (설치장비 시트가 이름을 저장한 경우 대비)
+  var nameToId = {};
+  for (var i = 1; i < schoolRows.length; i++) {
+    nameToId[String(schoolRows[i][5])] = String(schoolRows[i][0]);
+  }
+
+  var rows = getSheet('설치장비').getDataRange().getValues();
+  if (rows.length < 2) return [];
+
+  var stats = {};
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i];
+    var rawId   = String(r[1]);
+    var rawName = String(r[2] || '');
+    var schoolId = nameToId[rawName] || rawId;
+    if (!schoolId) continue;
+
+    var cnt         = Number(r[5]) || 1;
+    var exemptMonth = String(r[9] || '');
+
+    if (!stats[schoolId]) {
+      stats[schoolId] = { schoolId: schoolId, totalInstall: 0, exemptMonth: '' };
+    }
+    stats[schoolId].totalInstall += cnt;
+    if (exemptMonth && !stats[schoolId].exemptMonth) {
+      stats[schoolId].exemptMonth = exemptMonth;
+    }
+  }
+  return Object.values(stats);
 }
 
 // 제품명 시트 컬럼 순서: 품목 | 제품명
@@ -614,6 +661,7 @@ function handleGetAllSchools(data) {
       schoolId:            String(r[0]),
       techId:              String(r[1]),
       contact:             String(r[2]),
+      contractor:          String(r[3] || ''),
       region:              String(r[4]),
       name:                String(r[5]),
       address:             String(r[6]),
@@ -1412,7 +1460,7 @@ function handleSaveDashcamPhoto(data) {
   }
 }
 
-// ── 웰라수 창고(중앙 창고) 재고 조회
+// 웰라수 창고(중앙 창고) 재고 조회
 function handleGetCentralWarehouseStock(data) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
 

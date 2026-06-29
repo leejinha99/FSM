@@ -1365,12 +1365,35 @@ function ensureDashcamSheet() {
   return sheet;
 }
 
-function getDashcamColMap(sheet) {
+function getDashcamColMap(sheet, targetYear) {
   var lastCol = sheet.getLastColumn();
   if (lastCol < 1) return {};
   var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   var map = {};
-  headers.forEach(function(h, i) { map[String(h).trim()] = i; });
+
+  var hasYearSection = headers.some(function(h) {
+    return /^\d{4}년도$/.test(String(h || '').trim());
+  });
+
+  if (!hasYearSection) {
+    headers.forEach(function(h, i) { if (h) map[String(h).trim()] = i; });
+    map['_dateCol'] = map['날짜'] !== undefined ? map['날짜'] : 0;
+    return map;
+  }
+
+  var inSection = false;
+  headers.forEach(function(h, i) {
+    var hStr = String(h || '').trim();
+    if (!hStr) return;
+    if (/^\d{4}년도$/.test(hStr)) {
+      inSection = !targetYear || (hStr === targetYear + '년도');
+      if (inSection) map['_dateCol'] = i;
+      return;
+    }
+    if (inSection && !map.hasOwnProperty(hStr)) map[hStr] = i;
+  });
+
+  if (map['_dateCol'] === undefined) map['_dateCol'] = 0;
   return map;
 }
 
@@ -1379,11 +1402,12 @@ function handleGetDashcamPhotos(data) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var colMap = getDashcamColMap(sheet);
   var techName = String(data.techName || '');
   var year     = data.year  ? String(data.year)  : null;
   var month    = data.month ? String(data.month).padStart(2, '0') : null;
 
+  var colMap     = getDashcamColMap(sheet, year);
+  var dateCol    = colMap['_dateCol'] !== undefined ? colMap['_dateCol'] : 0;
   var commuteCol = colMap[techName + ' 출근'];
   var leaveCol   = colMap[techName + ' 퇴근'];
 
@@ -1392,7 +1416,7 @@ function handleGetDashcamPhotos(data) {
 
   for (var i = 1; i < rows.length; i++) {
     var row     = rows[i];
-    var rawDate = row[0];
+    var rawDate = row[dateCol];
     var dateStr = rawDate instanceof Date
       ? Utilities.formatDate(rawDate, 'Asia/Seoul', 'yyyy-MM-dd')
       : String(rawDate || '');
@@ -1426,22 +1450,26 @@ function handleSaveDashcamPhoto(data) {
     var fileUrl  = 'https://drive.google.com/file/d/' + file.getId() + '/view';
 
     // 차량계기판 시트에 URL 기록
-    var sheet    = ensureDashcamSheet();
-    var colMap   = getDashcamColMap(sheet);
-    var colKey   = techName + ' ' + String(data.type || '출근');
-    var targetCol = colMap[colKey];
-    if (typeof targetCol === 'undefined') throw new Error('컬럼을 찾을 수 없습니다: ' + colKey);
+    var sheet = ensureDashcamSheet();
 
     // data.timestamp 예시: '2026.06.29 14:30' → '2026-06-29'
     var tsParts = String(data.timestamp || '').split(' ')[0].split('.');
     var date    = (tsParts.length === 3)
       ? tsParts[0] + '-' + tsParts[1] + '-' + tsParts[2]
       : formatDate(new Date());
+    var year = date.substring(0, 4);
+
+    var colMap    = getDashcamColMap(sheet, year);
+    var dateColIndex = colMap['_dateCol'] !== undefined ? colMap['_dateCol'] : 0;
+    var colKey    = techName + ' ' + String(data.type || '출근');
+    var targetCol = colMap[colKey];
+    if (typeof targetCol === 'undefined') throw new Error('컬럼을 찾을 수 없습니다: ' + colKey);
+
     var lastRow = sheet.getLastRow();
     var rowIndex = -1;
 
     if (lastRow > 1) {
-      var dateVals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      var dateVals = sheet.getRange(2, dateColIndex + 1, lastRow - 1, 1).getValues();
       for (var i = 0; i < dateVals.length; i++) {
         var cellVal = dateVals[i][0];
         var cellStr = cellVal instanceof Date
@@ -1453,7 +1481,7 @@ function handleSaveDashcamPhoto(data) {
 
     if (rowIndex === -1) {
       var nextRowNum = lastRow + 1;
-      sheet.getRange(nextRowNum, 1).setFormula('="' + date + '"');
+      sheet.getRange(nextRowNum, dateColIndex + 1).setFormula('="' + date + '"');
       sheet.getRange(nextRowNum, targetCol + 1).setValue(fileUrl);
     } else {
       sheet.getRange(rowIndex, targetCol + 1).setValue(fileUrl);

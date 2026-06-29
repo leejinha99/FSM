@@ -153,11 +153,15 @@ function SchoolDetailModal({ school, techName, onEdit, onClose }) {
   const [eqLoading, setEqLoading] = useState(true)
 
   useEffect(() => {
-    api.getEquipment(school.schoolId)
-      .then(setEquipment)
+    api.getEquipment(school.schoolId, school.name)
+      .then(data => {
+        setEquipment([...data].sort((a, b) => a.location.localeCompare(b.location, 'ko')))
+      })
       .catch(console.error)
       .finally(() => setEqLoading(false))
-  }, [school.schoolId])
+  }, [school.schoolId, school.name])
+
+  const exemptMonth = equipment.find(e => e.exemptMonth)?.exemptMonth || ''
 
   function InfoRow({ label, value }) {
     return (
@@ -174,9 +178,9 @@ function SchoolDetailModal({ school, techName, onEdit, onClose }) {
         <div className="flex items-start justify-between mb-4">
           <div>
             <h2 className="text-base font-bold text-gray-800">{school.name}</h2>
-            <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1 ${CONTRACT_BADGE[school.contractType] || 'bg-gray-100 text-gray-600'}`}>
-              {school.contractType}
-            </span>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {[school.region, school.contractType, exemptMonth || ''].filter(Boolean).join(' / ')}
+            </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -196,6 +200,7 @@ function SchoolDetailModal({ school, techName, onEdit, onClose }) {
         <div className="bg-gray-50 rounded-xl px-4 mb-5">
           <InfoRow label="지역" value={school.region} />
           <InfoRow label="담당기사" value={techName} />
+          <InfoRow label="계약자" value={school.contractor} />
           <InfoRow label="주소" value={school.address} />
           <InfoRow label="학교담당자" value={school.contact} />
           <InfoRow label="담당 연락처" value={school.contactPhone} />
@@ -204,17 +209,31 @@ function SchoolDetailModal({ school, techName, onEdit, onClose }) {
         </div>
 
         <div>
-          <h3 className="text-xs font-semibold text-gray-600 mb-3">설치 제품 목록</h3>
+          <h3 className="text-xs font-semibold text-gray-600 mb-2">
+            설치 제품 목록{equipment.length > 0 ? ` (${equipment.length}개)` : ''}
+          </h3>
           {eqLoading ? (
             <div className="flex justify-center py-4"><MiniSpinner /></div>
           ) : equipment.length === 0 ? (
             <p className="text-xs text-gray-400 py-2">등록된 제품이 없습니다</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {equipment.map(eq => (
-                <div key={eq.equipmentId} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
-                  <span className="text-sm text-gray-700">{eq.location}</span>
-                  <span className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-2.5 py-1 font-medium">{eq.model}</span>
+                <div key={eq.equipmentId} className="bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                  {/* 1행: 제품위치 (제품명) ——— 교체주기-(계약구분) */}
+                  <div className="flex items-center min-w-0">
+                    <span className="text-xs font-medium text-gray-800 truncate">{eq.location}</span>
+                    <span className="text-xs text-gray-400 ml-1 shrink-0">({eq.model})</span>
+                    <div className="flex-1 border-b border-dashed border-gray-200 mx-2 mb-0.5 min-w-2"></div>
+                    <span className="text-xs text-gray-500 shrink-0">
+                      {eq.filterInterval}개월{eq.contractType ? `-(${eq.contractType})` : ''}
+                    </span>
+                  </div>
+                  {/* 2행: 설치일 (임대/무상기간) */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-400">{eq.installDate || '-'}</span>
+                    {eq.leasePeriod && <span className="text-xs text-gray-400">({eq.leasePeriod})</span>}
+                  </div>
                 </div>
               ))}
             </div>

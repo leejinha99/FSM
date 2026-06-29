@@ -19,6 +19,16 @@ function getMonths(startYear) {
   })
 }
 
+function parseExemptSet(exemptMonth) {
+  if (!exemptMonth) return new Set()
+  return new Set(
+    String(exemptMonth)
+      .split(/[,\s·\/]+/)
+      .map(s => parseInt(s.replace(/[월달]/g, '').trim()))
+      .filter(n => !isNaN(n) && n >= 1 && n <= 12)
+  )
+}
+
 function Spinner() {
   return (
     <div className="flex justify-center py-8">
@@ -56,6 +66,7 @@ export default function TechManaged() {
 
   const [selectedYear, setSelectedYear] = useState(getDefaultYear)
   const [schools, setSchools] = useState([])
+  const [eqStats, setEqStats] = useState([])
   const [visits, setVisits] = useState([])
   const [loading, setLoading] = useState(true)
   const [visitLoading, setVisitLoading] = useState(false)
@@ -74,8 +85,14 @@ export default function TechManaged() {
   useEffect(() => {
     if (!user?.techId) return
     setLoading(true)
-    api.getMySchools(user.techId, selectedYear)
-      .then(setSchools)
+    Promise.all([
+      api.getMySchools(user.techId, selectedYear),
+      api.getAllEquipmentStats(selectedYear),
+    ])
+      .then(([s, eq]) => {
+        setSchools(s)
+        setEqStats(eq)
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [user?.techId, selectedYear])
@@ -97,6 +114,10 @@ export default function TechManaged() {
       .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
   , [schools])
 
+  const eqStatsMap = useMemo(() =>
+    Object.fromEntries(eqStats.map(e => [e.schoolId, e]))
+  , [eqStats])
+
   const visitMap = useMemo(() => {
     const map = {}
     visits.forEach(v => {
@@ -112,9 +133,11 @@ export default function TechManaged() {
     setSchoolModal(school)
     setNoteText(school.note || '')
     setNoteEditing(false)
+    setEquipment([])
     setEquipLoading(true)
     try {
-      setEquipment(await api.getEquipment(school.schoolId))
+      const data = await api.getEquipment(school.schoolId, school.name)
+      setEquipment([...data].sort((a, b) => a.location.localeCompare(b.location, 'ko')))
     } catch {
       setEquipment([])
     } finally {
@@ -176,8 +199,17 @@ export default function TechManaged() {
           <table className="min-w-max md:min-w-0 md:w-full text-xs border-collapse">
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[120px]">
+                <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[130px]">
                   학교명
+                </th>
+                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-left font-semibold min-w-[80px]">
+                  계약자
+                </th>
+                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-center font-semibold min-w-[52px]">
+                  설치대수
+                </th>
+                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-center font-semibold min-w-[64px]">
+                  면제달
                 </th>
                 {MONTHS.map(m => (
                   <th key={m.key}
@@ -190,37 +222,53 @@ export default function TechManaged() {
               </tr>
             </thead>
             <tbody>
-              {managedSchools.map((school, idx) => (
-                <tr key={school.schoolId}>
-                  <td
-                    className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
-                      ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                    onClick={() => openSchoolModal(school)}
-                  >
-                    {school.name}
-                  </td>
-                  {MONTHS.map(m => {
-                    const cellVisits = visitMap[school.schoolId]?.[m.key] || []
-                    const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
-                    return (
-                      <td
-                        key={m.key}
-                        className={`border border-gray-200 px-2 py-2.5 text-center cursor-pointer hover:bg-blue-50 transition
-                          ${isCurrentMonth ? 'bg-blue-50/40' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                        onClick={() => setVisitModal({ school, monthKey: m.key, label: m.label, visits: cellVisits })}
-                      >
-                        {cellVisits.length > 0 ? (
-                          <span className="text-blue-700 font-semibold">
-                            {cellVisits.map(v => dayjs(v.visitDate).date() + '일').join(', ')}
-                          </span>
-                        ) : (
-                          <span className="text-gray-200">-</span>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+              {managedSchools.map((school, idx) => {
+                const stats = eqStatsMap[school.schoolId]
+                const exemptSet = parseExemptSet(stats?.exemptMonth)
+                return (
+                  <tr key={school.schoolId}>
+                    <td
+                      className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
+                        ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                      onClick={() => openSchoolModal(school)}
+                    >
+                      {school.name}
+                    </td>
+                    <td className={`border border-gray-200 px-2 py-2.5 text-gray-600 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                      {school.contractor || '-'}
+                    </td>
+                    <td className={`border border-gray-200 px-2 py-2.5 text-center text-gray-700 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                      {stats?.totalInstall ?? '-'}
+                    </td>
+                    <td className={`border border-gray-200 px-2 py-2.5 text-center text-gray-500 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                      {stats?.exemptMonth || '-'}
+                    </td>
+                    {MONTHS.map(m => {
+                      const cellVisits = visitMap[school.schoolId]?.[m.key] || []
+                      const isExempt = exemptSet.has(m.month)
+                      const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
+                      return (
+                        <td
+                          key={m.key}
+                          className={`border border-gray-200 px-2 py-2.5 text-center cursor-pointer hover:bg-blue-50 transition
+                            ${isCurrentMonth ? 'bg-blue-50/40' : idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                          onClick={() => !isExempt && setVisitModal({ school, monthKey: m.key, label: m.label, visits: cellVisits })}
+                        >
+                          {isExempt ? (
+                            <span className="text-gray-300 font-medium">면</span>
+                          ) : cellVisits.length > 0 ? (
+                            <span className="text-blue-700 font-semibold">
+                              {cellVisits.map(v => dayjs(v.visitDate).date() + '일').join(', ')}
+                            </span>
+                          ) : (
+                            <span className="text-gray-200">-</span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -235,7 +283,13 @@ export default function TechManaged() {
             <div className="flex justify-between items-start p-5 pb-3 border-b border-gray-100">
               <div>
                 <h3 className="text-base font-bold text-gray-900">{schoolModal.name}</h3>
-                <span className="text-xs text-gray-400">{schoolModal.region} · {schoolModal.contractType}</span>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {[
+                    schoolModal.region,
+                    schoolModal.contractType,
+                    eqStatsMap[schoolModal.schoolId]?.exemptMonth || '',
+                  ].filter(Boolean).join(' / ')}
+                </p>
               </div>
               <CloseBtn onClick={closeSchoolModal} />
             </div>
@@ -244,6 +298,7 @@ export default function TechManaged() {
               {/* 기본 정보 */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">기본 정보</p>
+                {schoolModal.contractor && <InfoRow label="계약자" value={schoolModal.contractor} />}
                 <InfoRow label="주소" value={schoolModal.address} />
                 <InfoRow label="담당자" value={schoolModal.contact} />
                 <InfoRow label="연락처" value={schoolModal.contactPhone} />
@@ -288,26 +343,28 @@ export default function TechManaged() {
 
               {/* 설치 장비 */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 mb-2">설치 장비</p>
+                <p className="text-xs font-semibold text-gray-500 mb-2">
+                  설치 장비 {equipment.length > 0 ? `(${eqStatsMap[schoolModal.schoolId]?.totalInstall ?? equipment.length}대)` : ''}
+                </p>
                 {equipLoading ? <Spinner /> : equipment.length === 0 ? (
                   <p className="text-xs text-gray-300 py-2">등록된 장비 없음</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {equipment.map(eq => (
-                      <div key={eq.equipmentId} className="bg-gray-50 rounded-xl px-3 py-2.5">
-                        <div className="flex justify-between items-start mb-1">
-                          <div>
-                            <p className="text-sm font-medium text-gray-800">{eq.location}</p>
-                            <p className="text-xs text-gray-500">{eq.model || eq.modelName}</p>
-                          </div>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0
-                            ${eq.status === '정상' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {eq.status}
+                      <div key={eq.equipmentId} className="bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100">
+                        {/* 1행: 제품위치 (제품명) ——— 교체주기-(계약구분) */}
+                        <div className="flex items-center min-w-0">
+                          <span className="text-xs font-medium text-gray-800 truncate">{eq.location}</span>
+                          <span className="text-xs text-gray-400 ml-1 shrink-0">({eq.model})</span>
+                          <div className="flex-1 border-b border-dashed border-gray-200 mx-2 mb-0.5 min-w-2"></div>
+                          <span className="text-xs text-gray-500 shrink-0">
+                            {eq.filterInterval}개월{eq.contractType ? `-(${eq.contractType})` : ''}
                           </span>
                         </div>
-                        <div className="flex gap-3 text-xs text-gray-400">
-                          {eq.installDate && <span>설치일: {eq.installDate}</span>}
-                          {eq.filterInterval && <span>교체주기: {eq.filterInterval}개월</span>}
+                        {/* 2행: 설치일 (임대/무상기간) */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-gray-400">{eq.installDate || '-'}</span>
+                          {eq.leasePeriod && <span className="text-xs text-gray-400">({eq.leasePeriod})</span>}
                         </div>
                       </div>
                     ))}

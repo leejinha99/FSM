@@ -97,11 +97,11 @@ const MOCK = {
     { schoolId: 'S003', name: '푸른고등학교', region: '동부', address: '서울시 광진구 능동로 789', contact: '이선생', contactPhone: '02-5555-6666', techId: 'T002', contractType: '유지관리', email: 'pureun@edu.kr', note: '', bizNumber: '987-65-43210' },
   ],
   equipment: [
-    { equipmentId: 'E001', schoolId: 'S001', location: '1학년 복도', model: 'WP-3000', installDate: '2023-03-01', filterInterval: 6, status: '정상' },
-    { equipmentId: 'E002', schoolId: 'S001', location: '교무실', model: 'WP-2000', installDate: '2022-09-01', filterInterval: 6, status: '정상' },
-    { equipmentId: 'E003', schoolId: 'S002', location: '급식실', model: 'WP-5000', installDate: '2024-01-15', filterInterval: 12, status: '정상' },
-    { equipmentId: 'E004', schoolId: 'S003', location: '교장실', model: 'WP-5000', installDate: '2023-03-10', filterInterval: 6, status: '정상' },
-    { equipmentId: 'E005', schoolId: 'S003', location: '교무실', model: 'WP-3000', installDate: '2023-03-10', filterInterval: 6, status: '정상' },
+    { equipmentId: 'E001', schoolId: 'S001', schoolName: '한빛초등학교', location: '1학년 복도', model: 'WP-3000', installCount: 2, installDate: '2023-03-01', contractType: '구매', leasePeriod: '', exemptMonth: '7월,8월', filterInterval: 6 },
+    { equipmentId: 'E002', schoolId: 'S001', schoolName: '한빛초등학교', location: '교무실', model: 'WP-2000', installCount: 1, installDate: '2022-09-01', contractType: '구매', leasePeriod: '', exemptMonth: '7월,8월', filterInterval: 6 },
+    { equipmentId: 'E003', schoolId: 'S002', schoolName: '별빛중학교', location: '급식실', model: 'WP-5000', installCount: 1, installDate: '2024-01-15', contractType: '임대', leasePeriod: '36개월', exemptMonth: '', filterInterval: 12 },
+    { equipmentId: 'E004', schoolId: 'S003', schoolName: '푸른고등학교', location: '교장실', model: 'WP-5000', installCount: 1, installDate: '2023-03-10', contractType: '구매', leasePeriod: '', exemptMonth: '7월', filterInterval: 6 },
+    { equipmentId: 'E005', schoolId: 'S003', schoolName: '푸른고등학교', location: '교무실', model: 'WP-3000', installCount: 3, installDate: '2023-03-10', contractType: '구매', leasePeriod: '', exemptMonth: '7월', filterInterval: 6 },
   ],
   parts: [
     { partId: 'P001', name: '세디멘트 필터', spec: '5인치', unit: '개', safetyStock: 5, contractPrice: 8000, nonContractPrice: 12000, currentStock: 10, warehouseId: 'W-T001',
@@ -172,12 +172,28 @@ export const api = {
     return callApiCached('getMySchools', { techId, year }, `getMySchools_${techId}_${year || ''}`)
   },
 
-  async getEquipment(schoolId) {
+  async getEquipment(schoolId, schoolName) {
     if (MOCK_MODE) {
       await mockDelay(200)
-      return MOCK.equipment.filter(e => e.schoolId === schoolId)
+      return MOCK.equipment.filter(e =>
+        e.schoolId === schoolId || (schoolName && e.schoolName === schoolName)
+      )
     }
-    return callApiCached('getEquipment', { schoolId }, `getEquipment_${schoolId}`)
+    return callApiCached('getEquipment', { schoolId, schoolName }, `getEquipment_${schoolId}`)
+  },
+
+  async getAllEquipmentStats(year) {
+    if (MOCK_MODE) {
+      await mockDelay(200)
+      const stats = {}
+      MOCK.equipment.forEach(e => {
+        if (!stats[e.schoolId]) stats[e.schoolId] = { schoolId: e.schoolId, totalInstall: 0, exemptMonth: '' }
+        stats[e.schoolId].totalInstall += (e.installCount || 1)
+        if (e.exemptMonth && !stats[e.schoolId].exemptMonth) stats[e.schoolId].exemptMonth = e.exemptMonth
+      })
+      return Object.values(stats)
+    }
+    return callApiCached('getAllEquipmentStats', { year }, `getAllEquipmentStats_${year || ''}`)
   },
 
   async getMyParts(techId) {
@@ -519,6 +535,23 @@ export const api = {
       return { url: 'https://drive.google.com/mock' }
     }
     return callApi('saveDashcamPhoto', data, 60000)
+  },
+
+  async getSchoolHistory(schoolId, schoolName) {
+    if (MOCK_MODE) {
+      await mockDelay(300)
+      const techMap = Object.fromEntries(MOCK.techs.map(t => [t.techId, t.name]))
+      const visits = MOCK.visits
+        .filter(v => v.schoolId === schoolId || v.schoolName === schoolName)
+        .sort((a, b) => b.visitDate.localeCompare(a.visitDate))
+        .map(v => ({ ...v, techName: techMap[v.techId] || '' }))
+      const asList = MOCK.asTickets
+        .filter(a => a.schoolId === schoolId || a.schoolName === schoolName)
+        .sort((a, b) => b.reportedDate.localeCompare(a.reportedDate))
+        .map(a => ({ ...a, techName: techMap[a.assignedTechId] || '' }))
+      return { visits, asList }
+    }
+    return callApi('getSchoolHistory', { schoolId, schoolName })
   },
 
   async getStockMoves({ techId, warehouseId, year, month } = {}) {

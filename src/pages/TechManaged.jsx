@@ -79,6 +79,9 @@ export default function TechManaged() {
   const [noteSaving, setNoteSaving] = useState(false)
 
   const [visitModal, setVisitModal] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [historyData, setHistoryData] = useState({ visits: [], asList: [] })
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const MONTHS = useMemo(() => getMonths(selectedYear), [selectedYear])
 
@@ -135,6 +138,8 @@ export default function TechManaged() {
     setNoteEditing(false)
     setEquipment([])
     setEquipLoading(true)
+    setShowHistory(false)
+    setHistoryData({ visits: [], asList: [] })
     try {
       const data = await api.getEquipment(school.schoolId, school.name)
       setEquipment([...data].sort((a, b) => a.location.localeCompare(b.location, 'ko')))
@@ -202,10 +207,10 @@ export default function TechManaged() {
                 <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[130px]">
                   학교명
                 </th>
-                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-left font-semibold min-w-[80px]">
+                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-center font-semibold min-w-[80px]">
                   계약자
                 </th>
-                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-center font-semibold min-w-[52px]">
+                <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-center font-semibold min-w-[52px] whitespace-nowrap">
                   설치대수
                 </th>
                 <th className="bg-blue-600 text-white border border-blue-500 px-2 py-2.5 text-center font-semibold min-w-[64px]">
@@ -234,7 +239,7 @@ export default function TechManaged() {
                     >
                       {school.name}
                     </td>
-                    <td className={`border border-gray-200 px-2 py-2.5 text-gray-600 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                    <td className={`border border-gray-200 px-2 py-2.5 text-center text-gray-600 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                       {school.contractor || '-'}
                     </td>
                     <td className={`border border-gray-200 px-2 py-2.5 text-center text-gray-700 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
@@ -294,6 +299,102 @@ export default function TechManaged() {
               <CloseBtn onClick={closeSchoolModal} />
             </div>
 
+            {/* 방문 · AS 목록 버튼 (헤더 구분선 바로 아래) */}
+            <button
+              onClick={async () => {
+                if (showHistory) { setShowHistory(false); return }
+                setShowHistory(true)
+                setHistoryLoading(true)
+                try {
+                  const d = await api.getSchoolHistory(schoolModal.schoolId, schoolModal.name)
+                  setHistoryData(d)
+                } catch { setHistoryData({ visits: [], asList: [] }) }
+                finally { setHistoryLoading(false) }
+              }}
+              className="flex items-center justify-between w-full px-5 py-3 border-b border-gray-100 bg-gray-50/60 hover:bg-gray-100 transition shrink-0"
+            >
+              <span className="text-sm font-medium text-gray-700">방문 · AS 목록</span>
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${showHistory ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* 방문 · AS 확장 패널 */}
+            {showHistory && (
+              <div className="border-b border-gray-100 max-h-64 overflow-y-auto bg-gray-50/40 px-5 py-3 space-y-4 shrink-0">
+                {historyLoading ? (
+                  <div className="flex justify-center py-4"><Spinner /></div>
+                ) : (
+                  <>
+                    {/* 방문 목록 */}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-2">방문 목록 ({historyData.visits.length}건)</p>
+                      {historyData.visits.length === 0 ? (
+                        <p className="text-xs text-gray-300">방문 기록 없음</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {historyData.visits.map(v => (
+                            <div key={v.visitId} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-gray-800">
+                                    {v.visitDate} · {v.visitType}
+                                  </p>
+                                  {v.techName && <p className="text-xs text-gray-400">{v.techName}</p>}
+                                  {v.workContent && (
+                                    <p className="text-xs text-gray-500 truncate">{v.workContent}</p>
+                                  )}
+                                </div>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 font-medium
+                                  ${v.status === '완료' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  {v.status}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* AS 목록 */}
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-2">AS 목록 ({historyData.asList.length}건)</p>
+                      {historyData.asList.length === 0 ? (
+                        <p className="text-xs text-gray-300">AS 접수 내역 없음</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {historyData.asList.map(a => (
+                            <div key={a.asId} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-gray-800">
+                                    {a.reportedDate} · {a.symptom}
+                                  </p>
+                                  {a.techName && <p className="text-xs text-gray-400">{a.techName}</p>}
+                                  {(a.location || a.model) && (
+                                    <p className="text-xs text-gray-500">{[a.location, a.model].filter(Boolean).join(' / ')}</p>
+                                  )}
+                                </div>
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full shrink-0 font-medium
+                                  ${a.status === '완료' ? 'bg-green-100 text-green-700'
+                                  : a.status === '발행대기' ? 'bg-orange-100 text-orange-700'
+                                  : 'bg-yellow-100 text-yellow-700'}`}>
+                                  {a.status}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="overflow-y-auto p-5 space-y-5">
               {/* 기본 정보 */}
               <div className="space-y-2">
@@ -344,7 +445,7 @@ export default function TechManaged() {
               {/* 설치 장비 */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 mb-2">
-                  설치 장비 {equipment.length > 0 ? `(${eqStatsMap[schoolModal.schoolId]?.totalInstall ?? equipment.length}대)` : ''}
+                  설치 장비 {equipment.length > 0 ? `(${equipment.reduce((s, e) => s + (Number(e.installCount) || 1), 0)}대)` : ''}
                 </p>
                 {equipLoading ? <Spinner /> : equipment.length === 0 ? (
                   <p className="text-xs text-gray-300 py-2">등록된 장비 없음</p>

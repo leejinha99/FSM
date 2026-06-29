@@ -259,7 +259,8 @@ function EquipmentMultiSelect({ equipment, selectedIds, onChange, hint }) {
 
 // ─── 메인 폼 ──────────────────────────────────────────────────────────────
 
-export default function VisitRegister() {
+export default function VisitRegister({ onClose, onSave } = {}) {
+  const isModal = Boolean(onClose)
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -452,7 +453,7 @@ export default function VisitRegister() {
     try {
       await api.saveVisit(payload)
       setSuccess(true)
-      setTimeout(() => navigate('/calendar'), 1500)
+      setTimeout(() => { if (isModal) onSave?.(); else navigate('/calendar') }, 1500)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -461,6 +462,18 @@ export default function VisitRegister() {
   }
 
   if (loading) {
+    if (isModal) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-10">
+            <svg className="animate-spin w-8 h-8 text-blue-500 mx-auto" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <svg className="animate-spin w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24">
@@ -472,6 +485,20 @@ export default function VisitRegister() {
   }
 
   if (success) {
+    if (isModal) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl p-10 flex flex-col items-center gap-4">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-9 h-9 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-lg font-semibold text-gray-800">저장 완료!</p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
         <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
@@ -486,21 +513,28 @@ export default function VisitRegister() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 max-w-lg mx-auto flex flex-col">
+    <div
+      className={isModal ? 'fixed inset-0 z-50 bg-black/50 flex items-end md:items-center justify-center' : 'min-h-screen bg-gray-50 max-w-lg mx-auto flex flex-col'}
+      onClick={isModal ? onClose : undefined}
+    >
+      <div
+        className={isModal ? 'bg-gray-50 w-full max-w-lg rounded-t-2xl md:rounded-2xl flex flex-col max-h-[95vh]' : 'contents'}
+        onClick={isModal ? e => e.stopPropagation() : undefined}
+      >
       {/* 헤더 */}
-      <header className="bg-white border-b border-gray-200 px-4 pt-12 pb-4 sticky top-0 z-30">
+      <header className={`bg-white border-b border-gray-200 px-4 pb-4 sticky top-0 z-30 ${isModal ? 'py-4 flex-shrink-0' : 'pt-12'}`}>
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)}
+          <button onClick={isModal ? onClose : () => navigate(-1)}
             className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition">
             <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={isModal ? 2 : 2.5} d={isModal ? 'M6 18L18 6M6 6l12 12' : 'M15 19l-7-7 7-7'} />
             </svg>
           </button>
           <h1 className="text-lg font-bold text-gray-900">방문 등록</h1>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto pb-32">
+      <div className={`flex-1 overflow-y-auto${isModal ? '' : ' pb-32'}`}>
         <div className="px-4 py-4 space-y-5">
 
           {/* ── 기본 정보 ── */}
@@ -941,8 +975,8 @@ export default function VisitRegister() {
         </div>
       </div>
 
-      {/* 하단 고정 버튼 */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 p-4 pb-safe z-30">
+      {/* 하단 버튼 */}
+      <div className={isModal ? 'bg-white border-t border-gray-200 p-4 flex-shrink-0' : 'fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white border-t border-gray-200 p-4 pb-safe z-30'}>
         {error && (
           <div className="mb-3 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2.5 rounded-xl">
             {error}
@@ -965,6 +999,7 @@ export default function VisitRegister() {
             </>
           ) : '방문 저장'}
         </button>
+      </div>
       </div>
     </div>
   )

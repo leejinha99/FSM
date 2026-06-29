@@ -150,17 +150,16 @@ export default function TechManaged() {
       </div>
 
       {/* 학년도 필터 */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-3">
-        {YEAR_OPTIONS.map(y => (
-          <button
-            key={y}
-            onClick={() => setSelectedYear(y)}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition
-              ${selectedYear === y ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600'}`}
-          >
-            {y}년도
-          </button>
-        ))}
+      <div className="mb-3">
+        <select
+          value={selectedYear}
+          onChange={e => setSelectedYear(Number(e.target.value))}
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-medium focus:outline-none focus:border-blue-400 bg-white"
+        >
+          {YEAR_OPTIONS.map(y => (
+            <option key={y} value={y}>{y}년도</option>
+          ))}
+        </select>
       </div>
 
       <p className="text-xs text-gray-400 mb-3">
@@ -172,8 +171,8 @@ export default function TechManaged() {
           <p className="text-sm">담당 유지관리 학교가 없습니다</p>
         </div>
       ) : (
-        <div className="overflow-x-auto -mx-4">
-          <table className="min-w-max text-xs border-collapse">
+        <div className="overflow-x-auto -mx-4 md:mx-0">
+          <table className="min-w-max md:min-w-0 md:w-full text-xs border-collapse">
             <thead>
               <tr>
                 <th className="sticky left-0 z-20 bg-blue-600 text-white border border-blue-500 px-3 py-2.5 text-left font-semibold min-w-[120px]">
@@ -352,7 +351,7 @@ export default function TechManaged() {
                   {visitModal.visits.map(v => (
                     <button
                       key={v.visitId}
-                      onClick={() => { setVisitModal(null); navigate(`/visit/edit/${v.visitId}`) }}
+                      onClick={() => { setVisitModal(null); navigate(`/visit/edit/${v.visitId}`, { state: { visit: v } }) }}
                       className="w-full text-left bg-gray-50 hover:bg-blue-50 rounded-xl px-4 py-3 transition"
                     >
                       <div className="flex justify-between items-center">

@@ -291,20 +291,16 @@ export default function AdminTechSchedule() {
       {viewMode === '기사별' && (
         <>
           <div className="mb-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            <select
+              value={selectedTechId}
+              onChange={e => setSelectedTechId(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-blue-400 bg-white"
+            >
+              <option value="">기사 선택</option>
               {techs.map(t => (
-                <button
-                  key={t.techId}
-                  onClick={() => setSelectedTechId(t.techId)}
-                  className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition
-                    ${selectedTechId === t.techId
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-gray-200 text-gray-600 active:bg-gray-50'}`}
-                >
-                  {t.name}
-                </button>
+                <option key={t.techId} value={t.techId}>{t.name}</option>
               ))}
-            </div>
+            </select>
           </div>
 
           {!selectedTechId ? (

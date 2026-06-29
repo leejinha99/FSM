@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { api } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import VisitRegister from './VisitRegister.jsx'
 
 const VISIT_TYPE_DOT = {
   '필터교체': 'bg-blue-500',
@@ -588,6 +589,7 @@ export default function TechCalendar() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateAS, setShowCreateAS] = useState(false)
+  const [showVisitModal, setShowVisitModal] = useState(false)
 
   const visitsByDate = useMemo(() => {
     return visits.reduce((acc, v) => {
@@ -846,7 +848,7 @@ export default function TechCalendar() {
           AS접수등록
         </button>
         <button
-          onClick={() => navigate('/visit/new')}
+          onClick={() => setShowVisitModal(true)}
           className="flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2.5 rounded-full shadow-lg text-sm font-semibold active:bg-blue-700 transition"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -861,6 +863,13 @@ export default function TechCalendar() {
           user={user}
           onSave={() => { setShowCreateAS(false); fetchVisits() }}
           onClose={() => setShowCreateAS(false)}
+        />
+      )}
+
+      {showVisitModal && (
+        <VisitRegister
+          onClose={() => setShowVisitModal(false)}
+          onSave={() => { setShowVisitModal(false); fetchVisits() }}
         />
       )}
 

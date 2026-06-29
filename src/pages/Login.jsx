@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, isMockMode } from '../api/sheetsApi.js'
+import { api, isMockMode, prefetchForUser } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Login() {
@@ -25,6 +25,7 @@ export default function Login() {
     try {
       const userData = await api.login(id.trim(), password)
       login(userData)
+      prefetchForUser(userData)
       if (userData.role === '관리자') {
         navigate('/admin', { replace: true })
       } else {

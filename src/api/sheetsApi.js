@@ -19,6 +19,12 @@ function cacheSet(key, data) {
   return data
 }
 
+function cacheDeleteByPrefix(prefix) {
+  for (const key of _cache.keys()) {
+    if (key.startsWith(prefix)) _cache.delete(key)
+  }
+}
+
 // ─── 실제 API 호출 ─────────────────────────────────────────────────────────
 
 async function callApi(action, data = {}) {
@@ -155,7 +161,7 @@ export const api = {
         v.techId === techId && v.visitDate >= start && v.visitDate <= end
       )
     }
-    return callApi('getMyVisits', { techId, start, end })
+    return callApiCached('getMyVisits', { techId, start, end }, `getMyVisits_${techId}_${start}_${end}`)
   },
 
   async getMySchools(techId) {
@@ -163,7 +169,7 @@ export const api = {
       await mockDelay(200)
       return MOCK.schools.filter(s => s.techId === techId)
     }
-    return callApi('getMySchools', { techId })
+    return callApiCached('getMySchools', { techId }, `getMySchools_${techId}`)
   },
 
   async getEquipment(schoolId) {
@@ -171,7 +177,7 @@ export const api = {
       await mockDelay(200)
       return MOCK.equipment.filter(e => e.schoolId === schoolId)
     }
-    return callApi('getEquipment', { schoolId })
+    return callApiCached('getEquipment', { schoolId }, `getEquipment_${schoolId}`)
   },
 
   async getMyParts(techId) {
@@ -179,7 +185,7 @@ export const api = {
       await mockDelay(200)
       return MOCK.parts
     }
-    return callApi('getMyParts', { techId })
+    return callApiCached('getMyParts', { techId }, `getMyParts_${techId}`)
   },
 
   async getProductNames() {
@@ -225,7 +231,10 @@ export const api = {
       })
       return { visitId }
     }
-    return callApi('saveVisit', payload)
+    const result = await callApi('saveVisit', payload)
+    cacheDeleteByPrefix('getMyVisits_')
+    cacheDeleteByPrefix('getAllVisits_')
+    return result
   },
 
   // ─── 관리자 전용 ────────────────────────────────────────────────────────────
@@ -248,7 +257,7 @@ export const api = {
       if (techId) result = result.filter(v => v.techId === techId)
       return result.map(v => ({ ...v, techName: techMap[v.techId] || '' }))
     }
-    return callApi('getAllVisits', { start, end, techId })
+    return callApiCached('getAllVisits', { start, end, techId }, `getAllVisits_${start}_${end}_${techId || ''}`)
   },
 
   async getAllAS() {
@@ -257,7 +266,7 @@ export const api = {
       const techMap = Object.fromEntries(MOCK.techs.map(t => [t.techId, t.name]))
       return MOCK.asTickets.map(a => ({ ...a, assignedTechName: techMap[a.assignedTechId] || '' }))
     }
-    return callApi('getAllAS', {})
+    return callApiCached('getAllAS', {}, 'getAllAS')
   },
 
   async saveSchool(data) {
@@ -272,7 +281,10 @@ export const api = {
       }
       return { success: true }
     }
-    return callApi('saveSchool', data)
+    const result = await callApi('saveSchool', data)
+    _cache.delete('getAllSchools')
+    cacheDeleteByPrefix('getMySchools_')
+    return result
   },
 
   async saveTech(data) {
@@ -287,7 +299,9 @@ export const api = {
       }
       return { success: true }
     }
-    return callApi('saveTech', data)
+    const result = await callApi('saveTech', data)
+    _cache.delete('getAllTechs')
+    return result
   },
 
   async updateAS(asId, updates) {
@@ -297,7 +311,11 @@ export const api = {
       if (idx !== -1) MOCK.asTickets[idx] = { ...MOCK.asTickets[idx], ...updates }
       return { success: true }
     }
-    return callApi('updateAS', { asId, ...updates })
+    const result = await callApi('updateAS', { asId, ...updates })
+    _cache.delete('getAllAS')
+    cacheDeleteByPrefix('getMyAS_')
+    _cache.delete('getASInvoices')
+    return result
   },
 
   async getMyAS(techId) {
@@ -308,7 +326,7 @@ export const api = {
         .filter(a => a.assignedTechId === techId)
         .map(a => ({ ...a, schoolName: schoolMap[a.schoolId] || '' }))
     }
-    return callApi('getMyAS', { techId })
+    return callApiCached('getMyAS', { techId }, `getMyAS_${techId}`)
   },
 
   async updateVisit(visitId, data) {
@@ -318,7 +336,10 @@ export const api = {
       if (idx !== -1) MOCK.visits[idx] = { ...MOCK.visits[idx], ...data }
       return { visitId }
     }
-    return callApi('updateVisit', { visitId, ...data })
+    const result = await callApi('updateVisit', { visitId, ...data })
+    cacheDeleteByPrefix('getMyVisits_')
+    cacheDeleteByPrefix('getAllVisits_')
+    return result
   },
 
   async createAS(data) {
@@ -348,7 +369,10 @@ export const api = {
       })
       return { asId }
     }
-    return callApi('createAS', data)
+    const result = await callApi('createAS', data)
+    _cache.delete('getAllAS')
+    cacheDeleteByPrefix('getMyAS_')
+    return result
   },
 
   async sendEstimate(asId) {
@@ -358,7 +382,10 @@ export const api = {
       if (idx !== -1) MOCK.asTickets[idx] = { ...MOCK.asTickets[idx], quoteSent: true }
       return { success: true }
     }
-    return callApi('sendEstimate', { asId })
+    const result = await callApi('sendEstimate', { asId })
+    _cache.delete('getAllAS')
+    cacheDeleteByPrefix('getMyAS_')
+    return result
   },
 
   async saveASPayment(data) {
@@ -373,7 +400,11 @@ export const api = {
       }
       return { success: true }
     }
-    return callApi('saveASPayment', data)
+    const result = await callApi('saveASPayment', data)
+    _cache.delete('getAllAS')
+    cacheDeleteByPrefix('getMyAS_')
+    _cache.delete('getASInvoices')
+    return result
   },
 
   async getCentralWarehouseStock() {
@@ -390,7 +421,7 @@ export const api = {
           currentStock: p.currentStock,
         }))
     }
-    return callApi('getCentralWarehouseStock', {})
+    return callApiCached('getCentralWarehouseStock', {}, 'getCentralWarehouseStock')
   },
 
   async saveEstimate(data) {
@@ -400,7 +431,10 @@ export const api = {
       if (idx !== -1) MOCK.asTickets[idx] = { ...MOCK.asTickets[idx], quoteSent: true }
       return { success: true }
     }
-    return callApi('saveEstimate', data)
+    const result = await callApi('saveEstimate', data)
+    _cache.delete('getAllAS')
+    cacheDeleteByPrefix('getMyAS_')
+    return result
   },
 
   async completeInvoice(asId) {
@@ -410,7 +444,10 @@ export const api = {
       if (idx !== -1) MOCK.asTickets[idx] = { ...MOCK.asTickets[idx], status: '완료', invoiceCompleted: true }
       return { success: true }
     }
-    return callApi('completeInvoice', { asId })
+    const result = await callApi('completeInvoice', { asId })
+    _cache.delete('getAllAS')
+    _cache.delete('getASInvoices')
+    return result
   },
 
   async getASInvoices() {
@@ -421,7 +458,7 @@ export const api = {
         .filter(a => a.status === '발행대기')
         .map(a => ({ ...a, assignedTechName: techMap[a.assignedTechId] || '' }))
     }
-    return callApi('getASInvoices', {})
+    return callApiCached('getASInvoices', {}, 'getASInvoices')
   },
 
   async getWarehouses() {
@@ -429,7 +466,7 @@ export const api = {
       await mockDelay(200)
       return [...MOCK.warehouses]
     }
-    return callApi('getWarehouses', {})
+    return callApiCached('getWarehouses', {}, 'getWarehouses')
   },
 
   async saveStockMove(data) {
@@ -461,7 +498,11 @@ export const api = {
       }
       return { logId }
     }
-    return callApi('saveStockMove', data)
+    const result = await callApi('saveStockMove', data)
+    cacheDeleteByPrefix('getMyParts_')
+    cacheDeleteByPrefix('getStockMoves_')
+    _cache.delete('getCentralWarehouseStock')
+    return result
   },
 
   async getStockMoves({ techId, warehouseId, year, month } = {}) {
@@ -481,8 +522,27 @@ export const api = {
       }
       return moves
     }
-    return callApi('getStockMoves', { techId, warehouseId, year, month })
+    return callApiCached('getStockMoves', { techId, warehouseId, year, month }, `getStockMoves_${techId || ''}_${warehouseId || ''}_${year || ''}_${month || ''}`)
   },
 }
 
 export const isMockMode = MOCK_MODE
+
+// ─── 로그인 직후 백그라운드 프리패치 (Method B) ──────────────────────────────
+export function prefetchForUser(user) {
+  if (MOCK_MODE || !navigator.onLine) return
+  const start = dayjs().startOf('month').format('YYYY-MM-DD')
+  const end = dayjs().endOf('month').format('YYYY-MM-DD')
+
+  if (user.role === '기사') {
+    callApiCached('getMyVisits', { techId: user.techId, start, end }, `getMyVisits_${user.techId}_${start}_${end}`)
+    callApiCached('getMySchools', { techId: user.techId }, `getMySchools_${user.techId}`)
+    callApiCached('getMyParts', { techId: user.techId }, `getMyParts_${user.techId}`)
+    callApiCached('getMyAS', { techId: user.techId }, `getMyAS_${user.techId}`)
+  } else {
+    callApiCached('getAllSchools', {}, 'getAllSchools')
+    callApiCached('getAllTechs', {}, 'getAllTechs')
+    callApiCached('getAllAS', {}, 'getAllAS')
+    callApiCached('getAllVisits', { start, end, techId: null }, `getAllVisits_${start}_${end}_`)
+  }
+}

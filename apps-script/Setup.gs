@@ -93,6 +93,32 @@ function setupAllSheets() {
   SpreadsheetApp.getUi().alert('✅ 세팅 완료!\n\n모든 시트가 생성되었습니다.\n이제 Code.gs를 열어 웹앱으로 배포하세요.');
 }
 
+// ── Keep-warm 트리거 설정 (Method C) ─────────────────────────────────────
+// Apps Script 에디터에서 이 함수를 한 번 실행하면 5분마다 자동으로 pingKeepWarm이 호출됩니다.
+// 이렇게 하면 콜드 스타트 없이 빠른 응답이 유지됩니다.
+
+function setupKeepWarmTrigger() {
+  // 기존 keepWarm 트리거 삭제 (중복 방지)
+  ScriptApp.getProjectTriggers().forEach(function(trigger) {
+    if (trigger.getHandlerFunction() === 'pingKeepWarm') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // 5분마다 실행되는 트리거 생성
+  ScriptApp.newTrigger('pingKeepWarm')
+    .timeBased()
+    .everyMinutes(5)
+    .create();
+
+  SpreadsheetApp.getUi().alert('✅ Keep-warm 트리거 설정 완료!\n\n5분마다 자동으로 스크립트가 활성 상태를 유지합니다.\n콜드 스타트 지연이 크게 줄어듭니다.');
+}
+
+function pingKeepWarm() {
+  // 최소 작업으로 스크립트 인스턴스를 활성 상태로 유지
+  SpreadsheetApp.openById(MY_SHEET_ID).getName();
+}
+
 // ── 헬퍼: 시트 생성 + 헤더/초기 데이터 입력 ──────────────────────────────
 
 function setupSheet(ss, name, rows) {

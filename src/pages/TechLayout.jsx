@@ -48,6 +48,19 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    key: 'vehicle',
+    path: '/vehicle',
+    label: '차량관리',
+    icon: (active) => (
+      <svg className={`w-5 h-5 ${active ? 'text-white' : 'text-blue-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h10l2-2zM13 6l2.5 5H20a1 1 0 011 1v3a1 1 0 01-1 1h-1" />
+      </svg>
+    ),
+  },
 ]
 
 export default function TechLayout() {

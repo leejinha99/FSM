@@ -1392,7 +1392,10 @@ function handleGetDashcamPhotos(data) {
 
   for (var i = 1; i < rows.length; i++) {
     var row     = rows[i];
-    var dateStr = formatDate(row[0]);
+    var rawDate = row[0];
+    var dateStr = rawDate instanceof Date
+      ? Utilities.formatDate(rawDate, 'Asia/Seoul', 'yyyy-MM-dd')
+      : String(rawDate || '');
     if (!dateStr) continue;
     if (year  && !dateStr.startsWith(year)) continue;
     if (year && month && !dateStr.startsWith(year + '-' + month)) continue;
@@ -1436,7 +1439,11 @@ function handleSaveDashcamPhoto(data) {
     if (lastRow > 1) {
       var dateVals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
       for (var i = 0; i < dateVals.length; i++) {
-        if (formatDate(dateVals[i][0]) === date) { rowIndex = i + 2; break; }
+        var cellVal = dateVals[i][0];
+        var cellStr = cellVal instanceof Date
+          ? Utilities.formatDate(cellVal, 'Asia/Seoul', 'yyyy-MM-dd')
+          : String(cellVal || '');
+        if (cellStr === date) { rowIndex = i + 2; break; }
       }
     }
 
@@ -1444,10 +1451,11 @@ function handleSaveDashcamPhoto(data) {
       var numCols = sheet.getLastColumn();
       var newRow  = [];
       for (var j = 0; j < numCols; j++) newRow.push('');
-      var dp = date.split('-');
-      newRow[0] = new Date(Number(dp[0]), Number(dp[1]) - 1, Number(dp[2]));
       newRow[targetCol] = fileUrl;
       sheet.appendRow(newRow);
+      // 날짜는 텍스트로 강제 저장 (자동변환 방지)
+      var newRowNum = sheet.getLastRow();
+      sheet.getRange(newRowNum, 1).setNumberFormat('@').setValue(date);
     } else {
       sheet.getRange(rowIndex, targetCol + 1).setValue(fileUrl);
     }

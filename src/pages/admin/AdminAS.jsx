@@ -42,6 +42,7 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
   const [symptom, setSymptom] = useState(ticket.symptom || '')
   const [location, setLocation] = useState(ticket.location || '')
   const [model, setModel] = useState(ticket.model || '')
+  const [visitDate, setVisitDate] = useState(ticket.visitDate || '')
   const [saving, setSaving] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [sendingEstimate, setSendingEstimate] = useState(false)
@@ -52,7 +53,7 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
   async function handleStatusChange(newStatus) {
     setSaving(true)
     try {
-      await api.updateAS(ticket.asId, { status: newStatus, note, assignedTechId })
+      await api.updateAS(ticket.asId, { status: newStatus, note, assignedTechId, visitDate })
       onSave()
     } catch (e) {
       console.error(e)
@@ -64,7 +65,7 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
   async function handleSaveEdit() {
     setSaving(true)
     try {
-      await api.updateAS(ticket.asId, { note, assignedTechId, symptom, location, model })
+      await api.updateAS(ticket.asId, { note, assignedTechId, symptom, location, model, visitDate })
       onSave()
     } catch (e) {
       console.error(e)
@@ -178,6 +179,20 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
             )}
           </div>
 
+          {/* 방문일 / 완료일 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">방문일</label>
+              <input type="date" value={visitDate} onChange={e => setVisitDate(e.target.value)} className={INPUT} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">완료일</label>
+              <div className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 text-gray-700">
+                {ticket.completedDate || '-'}
+              </div>
+            </div>
+          </div>
+
           {/* 배정 기사 */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">배정 기사</label>
@@ -273,7 +288,7 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
             </>
           ) : (
             <>
-              <button onClick={() => api.updateAS(ticket.asId, { note, assignedTechId }).then(onSave)} disabled={saving}
+              <button onClick={() => api.updateAS(ticket.asId, { note, assignedTechId, visitDate }).then(onSave)} disabled={saving}
                 className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition">
                 메모 저장
               </button>

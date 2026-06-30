@@ -598,6 +598,7 @@ function EstimateModal({ ticket, onSave, onClose }) {
 
 function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstimate }) {
   const [note, setNote] = useState(ticket.note || '')
+  const [visitDate, setVisitDate] = useState(ticket.visitDate || '')
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
   const nextStatus = NEXT_STATUS[ticket.status]
@@ -606,7 +607,7 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
   async function handleStatusChange(newStatus) {
     setSaving(true)
     try {
-      await api.updateAS(ticket.asId, { status: newStatus, note })
+      await api.updateAS(ticket.asId, { status: newStatus, note, visitDate })
       onSave()
     } catch (e) {
       console.error(e)
@@ -618,8 +619,23 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
   async function handleSaveNote() {
     setSaving(true)
     try {
-      await api.updateAS(ticket.asId, { note })
-      onSaveNote(note)
+      await api.updateAS(ticket.asId, { note, visitDate })
+      onSaveNote({ note, visitDate })
+      setSavedMsg(true)
+      setTimeout(() => setSavedMsg(false), 2000)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleVisitDateChange(newDate) {
+    setVisitDate(newDate)
+    setSaving(true)
+    try {
+      await api.updateAS(ticket.asId, { visitDate: newDate })
+      onSaveNote({ visitDate: newDate })
       setSavedMsg(true)
       setTimeout(() => setSavedMsg(false), 2000)
     } catch (e) {
@@ -677,6 +693,25 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
                 </span>
               </div>
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">방문일</label>
+              <input
+                type="date"
+                value={visitDate}
+                onChange={e => handleVisitDateChange(e.target.value)}
+                disabled={saving}
+                className={INPUT}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">완료일</label>
+              <div className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 text-gray-700">
+                {ticket.completedDate || '-'}
+              </div>
+            </div>
           </div>
 
           <div>
@@ -759,7 +794,7 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
 
         <div className="mt-5 space-y-2">
           {savedMsg && (
-            <p className="text-center text-xs text-green-600 font-medium">메모가 저장되었습니다</p>
+            <p className="text-center text-xs text-green-600 font-medium">저장되었습니다</p>
           )}
           {ticket.status === '수리완료' ? (
             <>
@@ -1000,7 +1035,7 @@ export default function TechAS() {
         <ASDetailModal
           ticket={selected}
           onSave={() => { setSelected(null); load() }}
-          onSaveNote={(savedNote) => { setSelected(prev => prev ? { ...prev, note: savedNote } : prev); load() }}
+          onSaveNote={(patch) => { setSelected(prev => prev ? { ...prev, ...patch } : prev); load() }}
           onClose={() => setSelected(null)}
           onPayment={() => { setPaymentTicket(selected); setSelected(null) }}
           onEstimate={() => { setEstimateTicket(selected); setSelected(null) }}

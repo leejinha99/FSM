@@ -627,13 +627,13 @@ export default function TechCalendar() {
       ])
       setAsTickets(asData)
       const asEvents = asData
-        .filter(a => a.reportedDate >= start && a.reportedDate <= end)
+        .filter(a => a.visitDate && a.visitDate >= start && a.visitDate <= end)
         .map(a => ({
           visitId: a.asId,
-          visitDate: a.reportedDate,
+          visitDate: a.visitDate,
           visitTime: '',
           schoolName: a.schoolName,
-          visitType: 'AS접수',
+          visitType: 'AS방문',
           workContent: a.symptom,
           status: a.status,
           isAS: true,

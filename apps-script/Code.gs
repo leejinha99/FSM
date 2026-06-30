@@ -312,13 +312,16 @@ function handleGetMySchools(data) {
 // 장비ID(0)|학교ID(1)|학교명(2)|설치위치(3)|모델명(4)|설치대수(5)|설치일자(6)|
 // 계약구분(7)|임대/무상기간(8)|면제달(9)|필터교체주기(10)|비고(11)
 function handleGetEquipment(data) {
-  // 학교명→ID 맵 구성 (설치장비 시트 B컬럼에 학교명이 저장된 경우 대비)
+  // 학교명(정규화)→ID 맵 구성 (설치장비 시트 B컬럼에 학교명이 저장된 경우 대비)
   var year = getCurrentMgmtYear();
   var schoolRows = getSchoolSheet(year).getDataRange().getValues();
   var nameToId = {};
   for (var si = 1; si < schoolRows.length; si++) {
-    nameToId[String(schoolRows[si][5])] = String(schoolRows[si][0]);
+    nameToId[normName(schoolRows[si][5])] = String(schoolRows[si][0]);
   }
+
+  var key     = normName(data.schoolId);
+  var keyName = data.schoolName ? normName(data.schoolName) : '';
 
   var rows = getSheet('설치장비').getDataRange().getValues();
   if (rows.length < 2) return [];
@@ -328,14 +331,14 @@ function handleGetEquipment(data) {
     var r = rows[i];
     var rawId   = String(r[1]);
     var rawName = String(r[2] || '');
-    // B컬럼이 학교명일 경우 ID로 변환, 아니면 그대로 사용
-    var resolvedId = nameToId[rawName] || nameToId[rawId] || rawId;
+    // 학교명/ID를 정규화(공백·줄바꿈 제거)해서 매칭
+    var resolvedId = nameToId[normName(rawName)] || nameToId[normName(rawId)] || rawId;
 
     var matches =
-      resolvedId === data.schoolId ||
-      rawId      === data.schoolId ||
-      (data.schoolName && rawName === data.schoolName) ||
-      (data.schoolName && rawId   === data.schoolName);
+      normName(resolvedId) === key ||
+      normName(rawId)      === key ||
+      normName(rawName)    === key ||
+      (keyName && (normName(rawName) === keyName || normName(rawId) === keyName));
 
     if (!matches) continue;
     result.push({

@@ -289,8 +289,15 @@ function TechCreateASModal({ user, onSave, onClose }) {
 
   const models = useMemo(() => {
     if (!form.location) return []
-    return equipment.filter(e => e.location === form.location).map(e => e.model)
+    return [...new Set(equipment.filter(e => e.location === form.location).map(e => e.model).filter(Boolean))]
   }, [equipment, form.location])
+
+  // 설치위치에 모델이 1종만 설치돼 있으면 자동 선택
+  useEffect(() => {
+    if (models.length === 1) {
+      setForm(f => f.model === models[0] ? f : { ...f, model: models[0] })
+    }
+  }, [models])
 
   function update(patch) { setForm(f => ({ ...f, ...patch })) }
 

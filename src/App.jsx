@@ -18,6 +18,7 @@ import AdminTechSchedule from './pages/admin/AdminTechSchedule.jsx'
 import AdminStock from './pages/admin/AdminStock.jsx'
 import TechManaged from './pages/TechManaged.jsx'
 import TechVehicle from './pages/TechVehicle.jsx'
+import ReloadPrompt from './components/ReloadPrompt.jsx'
 
 function RequireAuth({ children, requiredRole }) {
   const { user } = useAuth()
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+        <ReloadPrompt />
       </NotificationProvider>
     </AuthProvider>
   )

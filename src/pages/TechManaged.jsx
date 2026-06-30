@@ -29,6 +29,11 @@ function parseExemptSet(exemptMonth) {
   )
 }
 
+// 학교명 매칭용 정규화: 공백/줄바꿈 모두 제거 (시트 간 표기 차이 흡수)
+function normName(s) {
+  return String(s == null ? '' : s).replace(/\s+/g, '')
+}
+
 function Spinner() {
   return (
     <div className="flex justify-center py-8">
@@ -118,7 +123,7 @@ export default function TechManaged() {
   , [schools])
 
   const eqStatsMap = useMemo(() =>
-    Object.fromEntries(eqStats.map(e => [e.schoolId, e]))
+    Object.fromEntries(eqStats.map(e => [normName(e.schoolName), e]))
   , [eqStats])
 
   const visitMap = useMemo(() => {
@@ -228,10 +233,10 @@ export default function TechManaged() {
             </thead>
             <tbody>
               {managedSchools.map((school, idx) => {
-                const stats = eqStatsMap[school.schoolId]
+                const stats = eqStatsMap[normName(school.name)]
                 const exemptSet = parseExemptSet(stats?.exemptMonth)
                 return (
-                  <tr key={school.schoolId}>
+                  <tr key={school.schoolId || school.name || idx}>
                     <td
                       className={`sticky left-0 z-10 border border-gray-200 px-3 py-2.5 font-medium text-blue-700 truncate max-w-[160px] cursor-pointer hover:bg-blue-50 transition
                         ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
@@ -292,7 +297,7 @@ export default function TechManaged() {
                   {[
                     schoolModal.region,
                     schoolModal.contractType,
-                    eqStatsMap[schoolModal.schoolId]?.exemptMonth || '',
+                    eqStatsMap[normName(schoolModal.name)]?.exemptMonth || '',
                   ].filter(Boolean).join(' / ')}
                 </p>
               </div>

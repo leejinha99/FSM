@@ -143,6 +143,23 @@ function getSchoolSheet(year) {
   return named || ss.getSheetByName('학교');
 }
 
+// 기사ID(코드) → 기사 이름 변환. 이미 이름이거나 못 찾으면 입력값 그대로 반환.
+// 학교 시트 '담당기사' 칸이 이름으로 통일되어, 로그인이 보내는 코드(T001)를 이름으로 바꿔 매칭한다.
+function getTechNameById(techId) {
+  var key = String(techId || '').trim();
+  if (!key) return key;
+  var rows = getSheet('기사').getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === key) return String(rows[i][1]).trim();
+  }
+  return key;
+}
+
+// 학교명 매칭용 정규화: 공백/줄바꿈 모두 제거 (학교 시트 ↔ 설치장비 시트 표기 차이 흡수)
+function normName(s) {
+  return String(s == null ? '' : s).replace(/\s+/g, '');
+}
+
 function sheetToObjects(sheet) {
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
@@ -262,13 +279,14 @@ function handleGetMyVisits(data) {
 // 담당자연락처(7)|학교이메일(8)|계약구분(9)|사업자번호(10)|사업자등록증링크(11)|비고(12)
 function handleGetMySchools(data) {
   var year = data.year || getCurrentMgmtYear();
+  var techName = getTechNameById(data.techId);
   var rows = getSchoolSheet(year).getDataRange().getValues();
   if (rows.length < 2) return [];
 
   var result = [];
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    if (String(r[1]) !== data.techId) continue;
+    if (String(r[1]).trim() !== techName) continue;
     result.push({
       schoolId:            String(r[0]),
       techId:              String(r[1]),
@@ -338,34 +356,27 @@ function handleGetEquipment(data) {
 
 // 학교별 설치 통계 (설치대수 합계 + 면제달)
 function handleGetAllEquipmentStats(data) {
-  var year = data.year || getCurrentMgmtYear();
-  var schoolRows = getSchoolSheet(year).getDataRange().getValues();
-  // 학교명 → 학교ID 맵 (설치장비 시트가 이름을 저장한 경우 대비)
-  var nameToId = {};
-  for (var i = 1; i < schoolRows.length; i++) {
-    nameToId[String(schoolRows[i][5])] = String(schoolRows[i][0]);
-  }
-
+  // 학교명(정규화) 기준으로 설치대수 합산 + 면제달 집계.
+  // schoolId가 비어있는 학교가 많아 ID 대신 학교명으로 매칭한다.
   var rows = getSheet('설치장비').getDataRange().getValues();
   if (rows.length < 2) return [];
 
   var stats = {};
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    var rawId   = String(r[1]);
-    var rawName = String(r[2] || '');
-    var schoolId = nameToId[rawName] || rawId;
-    if (!schoolId) continue;
+    var rawName = String(r[2] || r[1] || '');
+    var key = normName(rawName);
+    if (!key) continue;
 
     var cnt         = Number(r[5]) || 1;
     var exemptMonth = String(r[9] || '');
 
-    if (!stats[schoolId]) {
-      stats[schoolId] = { schoolId: schoolId, totalInstall: 0, exemptMonth: '' };
+    if (!stats[key]) {
+      stats[key] = { schoolName: rawName, schoolId: String(r[1] || ''), totalInstall: 0, exemptMonth: '' };
     }
-    stats[schoolId].totalInstall += cnt;
-    if (exemptMonth && !stats[schoolId].exemptMonth) {
-      stats[schoolId].exemptMonth = exemptMonth;
+    stats[key].totalInstall += cnt;
+    if (exemptMonth && !stats[key].exemptMonth) {
+      stats[key].exemptMonth = exemptMonth;
     }
   }
   return Object.values(stats);

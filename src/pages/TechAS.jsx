@@ -596,9 +596,10 @@ function EstimateModal({ ticket, onSave, onClose }) {
 
 // ── AS 상세 모달 ────────────────────────────────────────────────────────────
 
-function ASDetailModal({ ticket, onSave, onClose, onPayment, onEstimate }) {
+function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstimate }) {
   const [note, setNote] = useState(ticket.note || '')
   const [saving, setSaving] = useState(false)
+  const [savedMsg, setSavedMsg] = useState(false)
   const nextStatus = NEXT_STATUS[ticket.status]
   const pi = ticket.paymentInfo || {}
 
@@ -618,7 +619,9 @@ function ASDetailModal({ ticket, onSave, onClose, onPayment, onEstimate }) {
     setSaving(true)
     try {
       await api.updateAS(ticket.asId, { note })
-      onSave()
+      onSaveNote(note)
+      setSavedMsg(true)
+      setTimeout(() => setSavedMsg(false), 2000)
     } catch (e) {
       console.error(e)
     } finally {
@@ -755,6 +758,9 @@ function ASDetailModal({ ticket, onSave, onClose, onPayment, onEstimate }) {
         </div>
 
         <div className="mt-5 space-y-2">
+          {savedMsg && (
+            <p className="text-center text-xs text-green-600 font-medium">메모가 저장되었습니다</p>
+          )}
           {ticket.status === '수리완료' ? (
             <>
               <div className="flex gap-2">
@@ -994,6 +1000,7 @@ export default function TechAS() {
         <ASDetailModal
           ticket={selected}
           onSave={() => { setSelected(null); load() }}
+          onSaveNote={(savedNote) => { setSelected(prev => prev ? { ...prev, note: savedNote } : prev); load() }}
           onClose={() => setSelected(null)}
           onPayment={() => { setPaymentTicket(selected); setSelected(null) }}
           onEstimate={() => { setEstimateTicket(selected); setSelected(null) }}

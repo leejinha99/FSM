@@ -714,16 +714,18 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">수리 내역</label>
-            <textarea
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              className={INPUT}
-              rows={3}
-              placeholder="처리 내용을 입력하세요"
-            />
-          </div>
+          {ticket.status !== '접수' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">수리 내역</label>
+              <textarea
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                className={INPUT}
+                rows={3}
+                placeholder="처리 내용을 입력하세요"
+              />
+            </div>
+          )}
 
           {ticket.paymentMethod && Object.keys(pi).length > 0 && (
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
@@ -824,13 +826,15 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
             </>
           ) : (
             <div className="flex gap-2">
-              <button
-                onClick={handleSaveNote}
-                disabled={saving}
-                className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition"
-              >
-                메모 저장
-              </button>
+              {ticket.status !== '접수' && (
+                <button
+                  onClick={handleSaveNote}
+                  disabled={saving}
+                  className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition"
+                >
+                  메모 저장
+                </button>
+              )}
               {nextStatus && (
                 <button
                   onClick={() => handleStatusChange(nextStatus)}
@@ -886,30 +890,38 @@ export default function TechAS() {
     setSelected(ticket)
   }
 
+  // 접수일 또는 방문일이 선택한 기간에 들어오면 매칭 (6월 접수·7월 방문 → 6월·7월 양쪽에 잡힘)
+  const dateFiltered = useMemo(() => {
+    return tickets.filter(a => {
+      const rep = a.reportedDate || ''
+      const vis = a.visitDate || ''
+      if (filterYear && !(rep.startsWith(filterYear) || vis.startsWith(filterYear))) return false
+      if (filterMonth) {
+        const ym = `${filterYear}-${filterMonth.padStart(2, '0')}`
+        if (!(rep.startsWith(ym) || vis.startsWith(ym))) return false
+      }
+      if (filterDay && filterMonth) {
+        const ymd = `${filterYear}-${filterMonth.padStart(2, '0')}-${filterDay.padStart(2, '0')}`
+        if (!(rep === ymd || vis === ymd)) return false
+      }
+      return true
+    })
+  }, [tickets, filterYear, filterMonth, filterDay])
+
   const filtered = useMemo(() => {
-    let list = statusFilter === '전체' ? tickets : tickets.filter(a => a.status === statusFilter)
-    if (filterYear) list = list.filter(a => a.reportedDate.startsWith(filterYear))
-    if (filterMonth) {
-      const m = filterMonth.padStart(2, '0')
-      list = list.filter(a => a.reportedDate.startsWith(`${filterYear}-${m}`))
-    }
-    if (filterDay && filterMonth) {
-      const m = filterMonth.padStart(2, '0')
-      const d = filterDay.padStart(2, '0')
-      list = list.filter(a => a.reportedDate === `${filterYear}-${m}-${d}`)
-    }
+    const list = statusFilter === '전체' ? dateFiltered : dateFiltered.filter(a => a.status === statusFilter)
     return [...list].sort((a, b) =>
       sortOrder === 'newest'
-        ? b.reportedDate.localeCompare(a.reportedDate)
-        : a.reportedDate.localeCompare(b.reportedDate)
+        ? (b.reportedDate || '').localeCompare(a.reportedDate || '')
+        : (a.reportedDate || '').localeCompare(b.reportedDate || '')
     )
-  }, [tickets, statusFilter, filterYear, filterMonth, filterDay, sortOrder])
+  }, [dateFiltered, statusFilter, sortOrder])
 
   const counts = useMemo(() => {
-    const c = { '전체': tickets.length }
-    STATUS_TABS.slice(1).forEach(s => { c[s] = tickets.filter(a => a.status === s).length })
+    const c = { '전체': dateFiltered.length }
+    STATUS_TABS.slice(1).forEach(s => { c[s] = dateFiltered.filter(a => a.status === s).length })
     return c
-  }, [tickets])
+  }, [dateFiltered])
 
   const years = []
   for (let y = 2024; y <= 2030; y++) years.push(String(y))

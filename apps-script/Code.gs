@@ -769,54 +769,15 @@ function handleGetAllVisits(data) {
 
 // AS접수 전체 조회
 function handleGetAllAS(data) {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
   var year = data.year || getCurrentMgmtYear();
-  var schoolMap = {};
-  sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
-    var sInfo = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
-    schoolMap[s['학교ID']] = sInfo;
-    schoolMap['#' + normName(s['학교명'])] = sInfo;
-  });
-  var techMap = {};
-  sheetToObjects(ss.getSheetByName('기사')).forEach(function(t) {
-    techMap[t['기사ID']] = t['이름'];
-  });
-
-  var asSheet = ss.getSheetByName('AS접수');
-  var rows = asSheet.getDataRange().getValues();
+  var rows = getSheet('AS접수').getDataRange().getValues();
   if (rows.length < 2) return [];
-
+  var c = colIndexMap(rows[0]);
+  var bizMap = schoolBizMap(year);
   var result = [];
   for (var i = 1; i < rows.length; i++) {
-    var r = rows[i];
-    var assignedTechId = String(r[4]);
-    var schoolId = String(r[1]);
-    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
-    var schoolNameManual = String(r[13] || '');
-    var paymentInfoRaw = String(r[11] || '');
-    var paymentInfo = {};
-    try { if (paymentInfoRaw) paymentInfo = JSON.parse(paymentInfoRaw); } catch(e) {}
-    result.push({
-      asId:              String(r[0]),
-      schoolId:          schoolId,
-      schoolName:        schoolNameManual || schoolInfo.name || schoolId,
-      reportedDate:      formatDate(r[2]),
-      symptom:           String(r[3]),
-      assignedTechId:    assignedTechId,
-      assignedTechName:  techMap[assignedTechId] || assignedTechId,
-      status:            String(r[5]),
-      note:              String(r[6] || ''),
-      contractType:      String(r[7] || ''),
-      location:          String(r[8] || ''),
-      model:             String(r[9] || ''),
-      paymentMethod:     String(r[10] || ''),
-      paymentInfo:       paymentInfo,
-      invoiceCompleted:  Boolean(r[12]),
-      schoolNameManual:  schoolNameManual,
-      bizNumber:         schoolInfo.bizNumber || '',
-      email:             schoolInfo.email || '',
-      quoteSent:         Boolean(r[14]),
-    });
+    if (!String(rows[i][c['ASID']] || '').trim()) continue;
+    result.push(buildAsObject(rows[i], c, bizMap));
   }
   return result;
 }
@@ -910,49 +871,69 @@ function handleSaveTech(data) {
 // AS접수 시트 컬럼:
 // AS접수ID(0)|학교ID(1)|접수일(2)|증상(3)|배정기사ID(4)|상태(5)|메모(6)|계약구분(7)|설치위치(8)|모델명(9)
 // |결제방법(10)|결제정보JSON(11)|발행완료여부(12)|학교명직접입력(13)
-function handleGetMyAS(data) {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var year = data.year || getCurrentMgmtYear();
-  var schoolMap = {};
+// AS접수 시트는 헤더 이름으로 열을 찾는다 (열 순서가 바뀌어도 안전).
+// 헤더: ASID|접수일|방문일|완료일|AS내용|담당기사|상태|수리내역|계약여부|학교|설치위치|모델명|결재방법|연결방문ID
+function colIndexMap(headerRow) {
+  var m = {};
+  for (var c = 0; c < headerRow.length; c++) {
+    var h = String(headerRow[c]).trim();
+    if (h && !(h in m)) m[h] = c;   // 같은 이름이 여러 개면 첫 번째만
+  }
+  return m;
+}
+
+function schoolBizMap(year) {
+  var m = {};
   sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
-    var sInfo = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
-    schoolMap[s['학교ID']] = sInfo;
-    schoolMap['#' + normName(s['학교명'])] = sInfo;
+    m['#' + normName(s['학교명'])] = { bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
   });
+  return m;
+}
 
-  var rows = ss.getSheetByName('AS접수').getDataRange().getValues();
+function buildAsObject(r, c, bizMap) {
+  function v(name) { return c[name] != null ? r[c[name]] : ''; }
+  var schoolName = String(v('학교') || '').trim();
+  var techName   = String(v('담당기사') || '').trim();
+  var sInfo = bizMap['#' + normName(schoolName)] || {};
+  return {
+    asId:             String(v('ASID')),
+    schoolId:         schoolName,            // 식별자는 학교명
+    schoolName:       schoolName,
+    reportedDate:     formatDate(v('접수일')),
+    visitDate:        formatDate(v('방문일')),
+    completedDate:    formatDate(v('완료일')),
+    symptom:          String(v('AS내용') || ''),
+    assignedTechId:   techName,
+    assignedTechName: techName,
+    status:           String(v('상태') || ''),
+    note:             String(v('수리내역') || ''),
+    contractType:     String(v('계약여부') || ''),
+    location:         String(v('설치위치') || ''),
+    model:            String(v('모델명') || ''),
+    paymentMethod:    String(v('결재방법') || ''),
+    linkedVisitId:    String(v('연결방문ID') || ''),
+    schoolNameManual: '',
+    paymentInfo:      {},
+    invoiceCompleted: false,
+    quoteSent:        false,
+    bizNumber:        sInfo.bizNumber || '',
+    email:            sInfo.email || '',
+  };
+}
+
+function handleGetMyAS(data) {
+  var year = data.year || getCurrentMgmtYear();
+  var rows = getSheet('AS접수').getDataRange().getValues();
   if (rows.length < 2) return [];
-
+  var c = colIndexMap(rows[0]);
+  var bizMap = schoolBizMap(year);
+  var myName = getTechNameById(data.techId);
   var result = [];
   for (var i = 1; i < rows.length; i++) {
-    var r = rows[i];
-    if (getTechNameById(String(r[4])) !== getTechNameById(data.techId)) continue;
-    var schoolId = String(r[1]);
-    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
-    var schoolNameManual = String(r[13] || '');
-    var paymentInfoRaw = String(r[11] || '');
-    var paymentInfo = {};
-    try { if (paymentInfoRaw) paymentInfo = JSON.parse(paymentInfoRaw); } catch(e) {}
-    result.push({
-      asId:              String(r[0]),
-      schoolId:          schoolId,
-      schoolName:        schoolNameManual || schoolInfo.name || schoolId,
-      reportedDate:      formatDate(r[2]),
-      symptom:           String(r[3]),
-      assignedTechId:    String(r[4]),
-      status:            String(r[5]),
-      note:              String(r[6] || ''),
-      contractType:      String(r[7] || ''),
-      location:          String(r[8] || ''),
-      model:             String(r[9] || ''),
-      paymentMethod:     String(r[10] || ''),
-      paymentInfo:       paymentInfo,
-      invoiceCompleted:  Boolean(r[12]),
-      schoolNameManual:  schoolNameManual,
-      bizNumber:         schoolInfo.bizNumber || '',
-      email:             schoolInfo.email || '',
-      quoteSent:         Boolean(r[14]),
-    });
+    var techName = String(rows[i][c['담당기사']] || '').trim();
+    if (getTechNameById(techName) !== myName) continue;
+    if (!String(rows[i][c['ASID']] || '').trim()) continue;
+    result.push(buildAsObject(rows[i], c, bizMap));
   }
   return result;
 }
@@ -963,24 +944,24 @@ function handleCreateAS(data) {
   try { lock.waitLock(10000); } catch(e) { throw new Error('잠시 후 다시 시도해주세요.'); }
   try {
     var sheet = getSheet('AS접수');
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var c = colIndexMap(headers);
     var asId = makeId('AS');
-    sheet.appendRow([
-      asId,                           // 0: AS접수ID
-      data.schoolId       || '',      // 1: 학교ID
-      data.reportedDate   || formatDate(new Date()), // 2: 접수일
-      data.symptom        || '',      // 3: 증상
-      data.assignedTechId || '',      // 4: 배정기사ID
-      '접수',                          // 5: 상태
-      data.note           || '',      // 6: 메모
-      data.contractType   || '',      // 7: 계약구분
-      data.location       || '',      // 8: 설치위치
-      data.model          || '',      // 9: 모델명
-      '',                             // 10: 결제방법
-      '',                             // 11: 결제정보JSON
-      false,                          // 12: 발행완료여부
-      data.schoolNameManual || '',    // 13: 학교명직접입력
-      false,                          // 14: 견적서발송여부
-    ]);
+    var row = [];
+    for (var k = 0; k < headers.length; k++) row.push('');
+    var set = function(name, val) { if (c[name] != null) row[c[name]] = val; };
+    set('ASID',     asId);
+    set('접수일',   data.reportedDate || formatDate(new Date()));
+    set('방문일',   data.visitDate || '');
+    set('AS내용',   data.symptom || '');
+    set('담당기사', getTechNameById(data.assignedTechId || ''));
+    set('상태',     '접수');
+    set('수리내역', data.note || '');
+    set('계약여부', data.contractType || '');
+    set('학교',     data.schoolNameManual || data.schoolName || data.schoolId || '');
+    set('설치위치', data.location || '');
+    set('모델명',   data.model || '');
+    sheet.appendRow(row);
     return { asId: asId };
   } finally {
     lock.releaseLock();
@@ -989,6 +970,7 @@ function handleCreateAS(data) {
 
 // 견적서 발송 처리
 function handleSendEstimate(data) {
+  throw new Error('견적서 기능은 새 AS 시트 구조에 맞춰 준비 중입니다.');
   var sheet = getSheet('AS접수');
   var rows = sheet.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
@@ -1029,20 +1011,28 @@ function handleUpdateVisit(data) {
 function handleUpdateAS(data) {
   var sheet = getSheet('AS접수');
   var rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) throw new Error('AS 접수 건을 찾을 수 없습니다: ' + data.asId);
+  var c = colIndexMap(rows[0]);
 
   for (var i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === data.asId) {
-      var row = i + 1;
-      if (data.status)                          sheet.getRange(row, 6).setValue(data.status);
-      if (typeof data.assignedTechId !== 'undefined') sheet.getRange(row, 5).setValue(data.assignedTechId);
-      if (typeof data.note !== 'undefined')     sheet.getRange(row, 7).setValue(data.note);
-      // 접수 내용 수정
-      if (typeof data.symptom !== 'undefined')  sheet.getRange(row, 4).setValue(data.symptom);
-      if (typeof data.location !== 'undefined') sheet.getRange(row, 9).setValue(data.location);
-      if (typeof data.model !== 'undefined')    sheet.getRange(row, 10).setValue(data.model);
-      if (typeof data.contractType !== 'undefined') sheet.getRange(row, 8).setValue(data.contractType);
-      if (typeof data.schoolNameManual !== 'undefined') sheet.getRange(row, 14).setValue(data.schoolNameManual);
-      if (typeof data.reportedDate !== 'undefined') sheet.getRange(row, 3).setValue(data.reportedDate);
+    if (String(rows[i][c['ASID']]) === data.asId) {
+      var rowNum = i + 1;
+      var setCol = function(name, val) { if (c[name] != null) sheet.getRange(rowNum, c[name] + 1).setValue(val); };
+      if (data.status)                                 setCol('상태', data.status);
+      if (typeof data.assignedTechId !== 'undefined')  setCol('담당기사', getTechNameById(data.assignedTechId));
+      if (typeof data.note !== 'undefined')            setCol('수리내역', data.note);
+      if (typeof data.visitDate !== 'undefined')       setCol('방문일', data.visitDate);
+      if (typeof data.symptom !== 'undefined')         setCol('AS내용', data.symptom);
+      if (typeof data.location !== 'undefined')        setCol('설치위치', data.location);
+      if (typeof data.model !== 'undefined')           setCol('모델명', data.model);
+      if (typeof data.contractType !== 'undefined')    setCol('계약여부', data.contractType);
+      if (typeof data.schoolName !== 'undefined')      setCol('학교', data.schoolName);
+      if (typeof data.reportedDate !== 'undefined')    setCol('접수일', data.reportedDate);
+      // 수리완료로 바뀌면 완료일 자동 기록 (비어있을 때만)
+      if (data.status === '수리완료' && c['완료일'] != null) {
+        var doneCell = sheet.getRange(rowNum, c['완료일'] + 1);
+        if (!String(doneCell.getValue()).trim()) doneCell.setValue(formatDate(new Date()));
+      }
       return { asId: data.asId };
     }
   }
@@ -1052,6 +1042,7 @@ function handleUpdateAS(data) {
 
 // AS 결제 처리 (기사)
 function handleSaveASPayment(data) {
+  throw new Error('결제 기능은 새 AS 시트 구조에 맞춰 준비 중입니다.');
   var lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch(e) { throw new Error('잠시 후 다시 시도해주세요.'); }
   try {
@@ -1124,6 +1115,7 @@ function handleSaveASPayment(data) {
 
 // 세금계산서 발행 완료 처리 (관리자)
 function handleCompleteInvoice(data) {
+  throw new Error('세금계산서 발행 기능은 새 AS 시트 구조에 맞춰 준비 중입니다.');
   var lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch(e) { throw new Error('잠시 후 다시 시도해주세요.'); }
   try {
@@ -1145,51 +1137,15 @@ function handleCompleteInvoice(data) {
 
 // 세금계산서 발행 대기 목록 조회 (관리자)
 function handleGetASInvoices(data) {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
   var year = data.year || getCurrentMgmtYear();
-  var schoolMap = {};
-  sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
-    var sInfo = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
-    schoolMap[s['학교ID']] = sInfo;
-    schoolMap['#' + normName(s['학교명'])] = sInfo;
-  });
-  var techMap = {};
-  sheetToObjects(ss.getSheetByName('기사')).forEach(function(t) {
-    techMap[t['기사ID']] = t['이름'];
-  });
-
-  var rows = ss.getSheetByName('AS접수').getDataRange().getValues();
+  var rows = getSheet('AS접수').getDataRange().getValues();
   if (rows.length < 2) return [];
-
+  var c = colIndexMap(rows[0]);
+  var bizMap = schoolBizMap(year);
   var result = [];
   for (var i = 1; i < rows.length; i++) {
-    var r = rows[i];
-    if (String(r[5]) !== '발행대기') continue;
-    var schoolId = String(r[1]);
-    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
-    var schoolNameManual = String(r[13] || '');
-    var paymentInfoRaw = String(r[11] || '');
-    var paymentInfo = {};
-    try { if (paymentInfoRaw) paymentInfo = JSON.parse(paymentInfoRaw); } catch(e) {}
-    result.push({
-      asId:             String(r[0]),
-      schoolId:         schoolId,
-      schoolName:       schoolNameManual || schoolInfo.name || schoolId,
-      reportedDate:     formatDate(r[2]),
-      symptom:          String(r[3]),
-      assignedTechId:   String(r[4]),
-      assignedTechName: techMap[String(r[4])] || String(r[4]),
-      status:           String(r[5]),
-      note:             String(r[6] || ''),
-      contractType:     String(r[7] || ''),
-      location:         String(r[8] || ''),
-      model:            String(r[9] || ''),
-      paymentMethod:    String(r[10] || ''),
-      paymentInfo:      paymentInfo,
-      invoiceCompleted: false,
-      bizNumber:        schoolInfo.bizNumber || '',
-      email:            schoolInfo.email || '',
-    });
+    if (String(rows[i][c['상태']] || '').trim() !== '발행대기') continue;
+    result.push(buildAsObject(rows[i], c, bizMap));
   }
   return result;
 }

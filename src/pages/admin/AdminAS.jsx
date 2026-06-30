@@ -202,11 +202,13 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
             </select>
           </div>
 
-          {/* 수리 내역 */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">수리 내역</label>
-            <textarea value={note} onChange={e => setNote(e.target.value)} className={INPUT} rows={3} placeholder="처리 내용 메모" />
-          </div>
+          {/* 수리 내역 (접수 상태에선 숨김, 처리중부터 표시) */}
+          {ticket.status !== '접수' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">수리 내역</label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} className={INPUT} rows={3} placeholder="처리 내용 메모" />
+            </div>
+          )}
 
           {/* 결제/발행 내역 */}
           {ticket.paymentMethod && Object.keys(pi).length > 0 && (
@@ -288,10 +290,12 @@ function ASDetailModal({ ticket, techs, onSave, onClose }) {
             </>
           ) : (
             <>
-              <button onClick={() => api.updateAS(ticket.asId, { note, assignedTechId, visitDate }).then(onSave)} disabled={saving}
-                className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition">
-                메모 저장
-              </button>
+              {ticket.status !== '접수' && (
+                <button onClick={() => api.updateAS(ticket.asId, { note, assignedTechId, visitDate }).then(onSave)} disabled={saving}
+                  className="flex-1 border border-blue-600 text-blue-600 py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-50 transition">
+                  메모 저장
+                </button>
+              )}
               {nextStatus && (
                 <button onClick={() => handleStatusChange(nextStatus)} disabled={saving}
                   className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-medium disabled:opacity-50 active:bg-blue-700 transition">
@@ -672,13 +676,22 @@ export default function AdminAS() {
   const years = []
   for (let y = 2024; y <= 2030; y++) years.push(String(y))
 
+  // 접수일 또는 방문일이 선택 기간에 들어오면 매칭 (6월 접수·7월 방문 → 양쪽에 잡힘)
+  const dateFiltered = useMemo(() => {
+    return tickets.filter(a => {
+      const rep = a.reportedDate || ''
+      const vis = a.visitDate || ''
+      if (filterYear && !(rep.startsWith(filterYear) || vis.startsWith(filterYear))) return false
+      if (filterMonth) {
+        const ym = `${filterYear}-${filterMonth.padStart(2, '0')}`
+        if (!(rep.startsWith(ym) || vis.startsWith(ym))) return false
+      }
+      return true
+    })
+  }, [tickets, filterYear, filterMonth])
+
   const filtered = useMemo(() => {
-    let list = statusFilter === '전체' ? tickets : tickets.filter(a => a.status === statusFilter)
-    if (filterYear) list = list.filter(a => a.reportedDate.startsWith(filterYear))
-    if (filterMonth) {
-      const m = filterMonth.padStart(2, '0')
-      list = list.filter(a => a.reportedDate.startsWith(`${filterYear}-${m}`))
-    }
+    let list = statusFilter === '전체' ? dateFiltered : dateFiltered.filter(a => a.status === statusFilter)
     if (contractFilter === '견적서발송') {
       list = list.filter(a => a.quoteSent)
     } else if (contractFilter) {
@@ -686,16 +699,16 @@ export default function AdminAS() {
     }
     if (schoolSearch.trim()) {
       const q = schoolSearch.trim().toLowerCase()
-      list = list.filter(a => a.schoolName.toLowerCase().includes(q))
+      list = list.filter(a => (a.schoolName || '').toLowerCase().includes(q))
     }
     return list
-  }, [tickets, statusFilter, filterYear, filterMonth, contractFilter, schoolSearch])
+  }, [dateFiltered, statusFilter, contractFilter, schoolSearch])
 
   const counts = useMemo(() => {
-    const c = { '전체': tickets.length }
-    STATUS_TABS.slice(1).forEach(s => { c[s] = tickets.filter(a => a.status === s).length })
+    const c = { '전체': dateFiltered.length }
+    STATUS_TABS.slice(1).forEach(s => { c[s] = dateFiltered.filter(a => a.status === s).length })
     return c
-  }, [tickets])
+  }, [dateFiltered])
 
   function handleSaved() {
     setSelected(null)

@@ -51,7 +51,7 @@ const NAV_ITEMS = [
   {
     key: 'vehicle',
     path: '/vehicle',
-    label: '차량관리',
+    label: '근태관리',
     icon: (active) => (
       <svg className={`w-5 h-5 ${active ? 'text-white' : 'text-blue-300'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

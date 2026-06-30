@@ -27,13 +27,73 @@ function resizeImage(file, maxWidth = 1200, quality = 0.8) {
   })
 }
 
+// ── 연차 사용내역 전체보기 ──────────────────────────────────────────────────
+
+function LeaveHistoryView({ leaveData, year, onBack }) {
+  const TYPE_STYLE = {
+    '연차':    'bg-gray-100 text-gray-600',
+    '오전반차': 'bg-blue-50 text-blue-600',
+    '오후반차': 'bg-orange-50 text-orange-600',
+    '유급':    'bg-emerald-50 text-emerald-600',
+  }
+  const usages = leaveData?.usages || []
+  return (
+    <div className="pb-20">
+      <div className="bg-white border-b border-gray-100 px-4 py-3.5 flex items-center gap-3 sticky top-0 z-10">
+        <button onClick={onBack} className="p-1.5 -ml-1.5 hover:bg-gray-100 rounded-lg active:bg-gray-200">
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h2 className="text-sm font-bold text-gray-900">{year}년 연차 사용 내역</h2>
+        <span className="ml-auto text-xs text-gray-400">총 {usages.length}건</span>
+      </div>
+      <div className="px-4 pt-3 space-y-2">
+        {usages.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center mt-4">
+            <p className="text-gray-400 text-sm">사용 내역이 없습니다.</p>
+          </div>
+        ) : (
+          usages.map((u, i) => {
+            const d = dayjs(u.date)
+            return (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between shadow-sm">
+                <div>
+                  <span className="text-sm font-semibold text-gray-800">
+                    {d.format('M월 D일')}
+                    <span className="ml-1 text-xs font-normal text-gray-400">({WEEKDAYS[d.day()]})</span>
+                  </span>
+                  <p className="text-xs text-gray-400 mt-0.5">{d.format('YYYY년')}</p>
+                </div>
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${TYPE_STYLE[u.type] || 'bg-gray-100 text-gray-600'}`}>
+                  {u.type}
+                </span>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── 연차 탭 ─────────────────────────────────────────────────────────────────
 
+const TYPE_CHIP = {
+  '연차':    'bg-gray-300 text-gray-700',
+  '오전반차': 'bg-blue-300 text-blue-800',
+  '오후반차': 'bg-orange-300 text-orange-800',
+  '유급':    'bg-emerald-300 text-emerald-800',
+}
+
 function LeaveTab({ user }) {
-  const curYear = new Date().getFullYear()
-  const [year, setYear] = useState(curYear)
+  const today = dayjs()
+  const [currentMonth, setCurrentMonth] = useState(() => today.startOf('month'))
   const [leaveData, setLeaveData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
+
+  const year = currentMonth.year()
 
   useEffect(() => {
     setLoading(true)
@@ -43,117 +103,132 @@ function LeaveTab({ user }) {
       .finally(() => setLoading(false))
   }, [user.techId, year])
 
-  const TYPE_STYLE = {
-    '연차':    'bg-gray-100 text-gray-600',
-    '오전반차': 'bg-blue-50 text-blue-600',
-    '오후반차': 'bg-orange-50 text-orange-600',
-    '유급':    'bg-emerald-50 text-emerald-600',
+  if (showHistory) {
+    return <LeaveHistoryView leaveData={leaveData} year={year} onBack={() => setShowHistory(false)} />
   }
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <svg className="animate-spin w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      </div>
-    )
+  const summary = leaveData?.summary || {}
+  const usageMap = {}
+  if (leaveData?.usages) {
+    leaveData.usages.forEach(u => { usageMap[u.date] = u.type })
   }
 
-  if (!leaveData) {
-    return <p className="text-center text-gray-400 text-sm py-16">연차 정보를 불러올 수 없습니다.</p>
-  }
-
-  const { baseInfo, usages, summary } = leaveData
+  const firstDay = currentMonth.startOf('month').day()
+  const daysInMonth = currentMonth.daysInMonth()
+  const cells = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  const todayStr = today.format('YYYY-MM-DD')
 
   return (
-    <div className="px-4 pt-4 pb-6 space-y-4">
-      {/* 연도 선택 */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setYear(y => y - 1)}
-          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
-        >
-          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <div className="pb-4">
+      {/* 통계 요약 바 (작게) */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-around">
+        <div className="text-center">
+          <p className="text-[10px] text-gray-400 leading-none mb-0.5">총 연차</p>
+          <p className="text-sm font-bold text-gray-800 leading-none">{loading ? '…' : (summary.totalLeave ?? '-')}<span className="text-[9px] font-normal">일</span></p>
+        </div>
+        <div className="w-px h-5 bg-gray-100" />
+        <div className="text-center">
+          <p className="text-[10px] text-green-500 leading-none mb-0.5">남은 연차</p>
+          <p className="text-sm font-bold text-green-600 leading-none">{loading ? '…' : (summary.remaining ?? '-')}<span className="text-[9px] font-normal">일</span></p>
+        </div>
+        <div className="w-px h-5 bg-gray-100" />
+        <div className="text-center">
+          <p className="text-[10px] text-gray-400 leading-none mb-0.5">사용 연차</p>
+          <p className="text-sm font-bold text-gray-700 leading-none">{loading ? '…' : (summary.usedLeave ?? '-')}<span className="text-[9px] font-normal">일</span></p>
+        </div>
+        <div className="w-px h-5 bg-gray-100" />
+        <div className="text-center">
+          <p className="text-[10px] text-gray-400 leading-none mb-0.5">반차</p>
+          <p className="text-sm font-bold text-gray-700 leading-none">{loading ? '…' : (summary.usedHalfDay ?? '-')}<span className="text-[9px] font-normal">회</span></p>
+        </div>
+        <div className="w-px h-5 bg-gray-100" />
+        <div className="text-center">
+          <p className="text-[10px] text-gray-400 leading-none mb-0.5">합계</p>
+          <p className="text-sm font-bold text-gray-700 leading-none">{loading ? '…' : (summary.totalUsed ?? '-')}<span className="text-[9px] font-normal">일</span></p>
+        </div>
+      </div>
+
+      {/* 월 네비게이션 */}
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100">
+        <button onClick={() => setCurrentMonth(m => m.subtract(1, 'month'))} className="p-2 hover:bg-gray-100 rounded-lg active:bg-gray-200">
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="text-base font-bold text-gray-800 flex-1 text-center">{year}년</span>
-        <button
-          onClick={() => setYear(y => y + 1)}
-          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
-          disabled={year >= curYear}
-        >
-          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <span className="text-base font-semibold text-gray-900">{currentMonth.format('YYYY년 M월')}</span>
+        <button onClick={() => setCurrentMonth(m => m.add(1, 'month'))} className="p-2 hover:bg-gray-100 rounded-lg active:bg-gray-200">
+          <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
       </div>
 
-      {/* 현황 카드 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-        {baseInfo.joinDate && (
-          <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
-            <span className="text-xs text-gray-500">입사일</span>
-            <span className="text-sm font-semibold text-gray-800">{baseInfo.joinDate}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-50 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-500 mb-1">총 연차</p>
-            <p className="text-2xl font-bold text-gray-800">{summary.totalLeave}<span className="text-sm font-normal ml-0.5">일</span></p>
-          </div>
-          <div className="bg-green-50 rounded-xl p-3 text-center">
-            <p className="text-xs text-green-600 mb-1">남은 연차</p>
-            <p className="text-2xl font-bold text-green-700">{summary.remaining}<span className="text-sm font-normal ml-0.5">일</span></p>
-          </div>
+      {/* 캘린더 */}
+      <div className="bg-white mx-3 mt-3 rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+        {/* 요일 헤더 */}
+        <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-100">
+          {WEEKDAYS.map((d, i) => (
+            <div key={d} className={`text-center text-xs font-medium py-2.5 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}`}>{d}</div>
+          ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mt-3">
-          <div className="bg-gray-50 rounded-xl p-2.5 text-center">
-            <p className="text-[10px] text-gray-500 mb-0.5">연차 사용</p>
-            <p className="text-base font-bold text-gray-700">{summary.usedLeave}<span className="text-xs font-normal">일</span></p>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-2.5 text-center">
-            <p className="text-[10px] text-gray-500 mb-0.5">반차 사용</p>
-            <p className="text-base font-bold text-gray-700">{summary.usedHalfDay}<span className="text-xs font-normal">회</span></p>
-          </div>
-          <div className="bg-gray-50 rounded-xl p-2.5 text-center">
-            <p className="text-[10px] text-gray-500 mb-0.5">합계 사용</p>
-            <p className="text-base font-bold text-gray-700">{summary.totalUsed}<span className="text-xs font-normal">일</span></p>
-          </div>
-        </div>
-      </div>
-
-      {/* 사용 내역 */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">사용 내역</h3>
-        {usages.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
-            <p className="text-gray-400 text-sm">사용 내역이 없습니다.</p>
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <svg className="animate-spin w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
           </div>
         ) : (
-          <div className="space-y-2">
-            {usages.map((u, i) => {
-              const d = dayjs(u.date)
+          <div className="grid grid-cols-7">
+            {cells.map((day, idx) => {
+              if (!day) return <div key={'e-' + idx} className="min-h-[70px] border-b border-r border-gray-50" />
+              const dateStr = currentMonth.date(day).format('YYYY-MM-DD')
+              const isToday = dateStr === todayStr
+              const isSunday = idx % 7 === 0
+              const isSaturday = idx % 7 === 6
+              const leaveType = usageMap[dateStr]
               return (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between shadow-sm">
-                  <div>
-                    <span className="text-sm font-semibold text-gray-800">
-                      {d.format('M월 D일')}
-                      <span className="ml-1 text-xs font-normal text-gray-400">({WEEKDAYS[d.day()]})</span>
-                    </span>
-                  </div>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${TYPE_STYLE[u.type] || 'bg-gray-100 text-gray-600'}`}>
-                    {u.type}
+                <div key={dateStr} className={`min-h-[70px] border-b border-r border-gray-50 p-1 flex flex-col items-center pt-1.5 ${leaveType ? 'bg-gray-50/70' : ''}`}>
+                  <span className={`text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full
+                    ${isToday ? 'bg-blue-600 text-white' : isSunday ? 'text-red-500' : isSaturday ? 'text-blue-500' : 'text-gray-700'}`}>
+                    {day}
                   </span>
+                  {leaveType && (
+                    <span className={`mt-1 text-[9px] font-semibold px-1 py-0.5 rounded-sm w-full text-center leading-tight ${TYPE_CHIP[leaveType] || 'bg-gray-300 text-gray-700'}`}>
+                      {leaveType}
+                    </span>
+                  )}
                 </div>
               )
             })}
           </div>
         )}
+      </div>
+
+      {/* 범례 */}
+      <div className="mx-3 mt-2.5 px-1 flex gap-3 flex-wrap">
+        {Object.entries(TYPE_CHIP).map(([type, cls]) => (
+          <div key={type} className="flex items-center gap-1">
+            <span className={`w-2.5 h-2.5 rounded-sm inline-block ${cls}`} />
+            <span className="text-[10px] text-gray-500">{type}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 사용 내역 전체 보기 버튼 */}
+      <div className="mx-3 mt-4">
+        <button
+          onClick={() => setShowHistory(true)}
+          className="w-full py-3 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-700 flex items-center justify-center gap-2 shadow-sm active:bg-gray-50"
+        >
+          사용 내역 전체 보기
+          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
       </div>
     </div>
   )

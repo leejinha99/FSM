@@ -51,6 +51,9 @@ function doPost(e) {
       case 'getDashcamPhotos':     result = handleGetDashcamPhotos(data);     break;
       case 'saveDashcamPhoto':     result = handleSaveDashcamPhoto(data);     break;
       case 'getAllEquipmentStats': result = handleGetAllEquipmentStats(data); break;
+      case 'getMyLeaveInfo':      result = handleGetMyLeaveInfo(data);      break;
+      case 'getAllLeaveInfo':      result = handleGetAllLeaveInfo(data);      break;
+      case 'getAllLeaveSchedules': result = handleGetAllLeaveSchedules(data); break;
       default:
         throw new Error('알 수 없는 액션: ' + action);
     }
@@ -97,6 +100,9 @@ function doGet(e) {
         case 'getCentralWarehouseStock': result = handleGetCentralWarehouseStock(data); break;
         case 'getDashcamPhotos':     result = handleGetDashcamPhotos(data);     break;
         case 'getAllEquipmentStats': result = handleGetAllEquipmentStats(data); break;
+        case 'getMyLeaveInfo':      result = handleGetMyLeaveInfo(data);      break;
+        case 'getAllLeaveInfo':      result = handleGetAllLeaveInfo(data);      break;
+        case 'getAllLeaveSchedules': result = handleGetAllLeaveSchedules(data); break;
         default:
           throw new Error('알 수 없는 액션: ' + action);
       }
@@ -1547,6 +1553,144 @@ function handleGetCentralWarehouseStock(data) {
       safetyStock:   Number(r[col['안전재고']]) || 0,
       currentStock:  currentStock,
     });
+  }
+  return result;
+}
+
+
+// ── 연차 관리 ──────────────────────────────────────────────
+
+// [연차기준정보] 컬럼: 기사명(0) | 입사일(1) | 연도(2) | 총연차일수(3) | 비고(4)
+// [연차사용내역] 컬럼: 번호(0) | 기사명(1) | 날짜(2) | 구분(3) | 사유(4) | 등록일(5) | 등록자(6)
+
+function handleGetMyLeaveInfo(data) {
+  var techName = getTechNameById(data.techId);
+  var year = Number(data.year || new Date().getFullYear());
+
+  var infoSheet = getSheet('연차기준정보');
+  var infoRows = infoSheet.getDataRange().getValues();
+  var baseInfo = null;
+  for (var i = 1; i < infoRows.length; i++) {
+    var r = infoRows[i];
+    if (normName(String(r[0])) === normName(techName) && Number(r[2]) === year) {
+      baseInfo = {
+        techName: String(r[0]),
+        joinDate: formatDate(r[1]),
+        year: Number(r[2]),
+        totalLeave: Number(r[3]) || 0,
+        note: String(r[4] || ''),
+      };
+      break;
+    }
+  }
+
+  var usageSheet = getSheet('연차사용내역');
+  var usageRows = usageSheet.getDataRange().getValues();
+  var usages = [];
+  for (var i = 1; i < usageRows.length; i++) {
+    var r = usageRows[i];
+    var uDate = formatDate(r[2]);
+    if (normName(String(r[1])) !== normName(techName)) continue;
+    if (!uDate.startsWith(String(year))) continue;
+    usages.push({
+      no: String(r[0]),
+      date: uDate,
+      type: String(r[3]),
+      reason: String(r[4] || ''),
+      registeredDate: formatDate(r[5]),
+      registeredBy: String(r[6] || ''),
+    });
+  }
+  usages.sort(function(a, b) { return b.date.localeCompare(a.date); });
+
+  var usedLeave   = usages.filter(function(u) { return u.type === '연차'; }).length;
+  var usedHalfDay = usages.filter(function(u) { return u.type === '오전반차' || u.type === '오후반차'; }).length;
+  // 유급은 사용일수 차감 없음 (국가 훈련 등)
+  var totalUsed = usedLeave + usedHalfDay * 0.5;
+  var totalLeave = baseInfo ? baseInfo.totalLeave : 0;
+
+  return {
+    baseInfo: baseInfo || { techName: techName, joinDate: '', year: year, totalLeave: 0, note: '' },
+    usages: usages,
+    summary: {
+      totalLeave: totalLeave,
+      usedLeave: usedLeave,
+      usedHalfDay: usedHalfDay,
+      totalUsed: totalUsed,
+      remaining: totalLeave - totalUsed,
+    },
+  };
+}
+
+function handleGetAllLeaveInfo(data) {
+  var year = Number(data.year || new Date().getFullYear());
+
+  var techSheet = getSheet('기사');
+  var techRows = techSheet.getDataRange().getValues();
+  var techs = [];
+  for (var i = 1; i < techRows.length; i++) {
+    var r = techRows[i];
+    if (String(r[6]).trim() !== '기사' || !r[7]) continue;
+    techs.push({ techId: String(r[0]).trim(), name: String(r[1]).trim() });
+  }
+
+  var infoSheet = getSheet('연차기준정보');
+  var infoRows = infoSheet.getDataRange().getValues();
+  var infoMap = {};
+  for (var i = 1; i < infoRows.length; i++) {
+    var r = infoRows[i];
+    if (Number(r[2]) !== year) continue;
+    infoMap[normName(String(r[0]))] = {
+      joinDate: formatDate(r[1]),
+      totalLeave: Number(r[3]) || 0,
+    };
+  }
+
+  var usageSheet = getSheet('연차사용내역');
+  var usageRows = usageSheet.getDataRange().getValues();
+  var usagesByTech = {};
+  for (var i = 1; i < usageRows.length; i++) {
+    var r = usageRows[i];
+    var uDate = formatDate(r[2]);
+    if (!uDate.startsWith(String(year))) continue;
+    var key = normName(String(r[1]));
+    if (!usagesByTech[key]) usagesByTech[key] = [];
+    usagesByTech[key].push(String(r[3]));
+  }
+
+  return techs.map(function(tech) {
+    var key = normName(tech.name);
+    var info = infoMap[key] || { joinDate: '', totalLeave: 0 };
+    var types = usagesByTech[key] || [];
+    var usedLeave    = types.filter(function(t) { return t === '연차'; }).length;
+    var usedHalfDay  = types.filter(function(t) { return t === '오전반차' || t === '오후반차'; }).length;
+    // 유급은 집계에서 제외
+    var totalUsed    = usedLeave + usedHalfDay * 0.5;
+    return {
+      techId:    tech.techId,
+      techName:  tech.name,
+      joinDate:  info.joinDate,
+      year:      year,
+      totalLeave: info.totalLeave,
+      usedLeave:  usedLeave,
+      usedHalfDay: usedHalfDay,
+      totalUsed:  totalUsed,
+      remaining:  info.totalLeave - totalUsed,
+    };
+  });
+}
+
+function handleGetAllLeaveSchedules(data) {
+  var usageSheet = getSheet('연차사용내역');
+  var usageRows = usageSheet.getDataRange().getValues();
+  var result = [];
+  for (var i = 1; i < usageRows.length; i++) {
+    var r = usageRows[i];
+    var uTechName = String(r[1]).trim();
+    var uDate     = formatDate(r[2]);
+    var uType     = String(r[3]).trim();
+    if (!uTechName || !uDate) continue;
+    result.push({ techName: uTechName, date: uDate, type: uType });
   }
   return result;
 }

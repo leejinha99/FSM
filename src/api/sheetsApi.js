@@ -521,6 +521,30 @@ export const api = {
     return result
   },
 
+
+  async getMyLeaveInfo(techId, year) {
+    if (MOCK_MODE) {
+      await mockDelay(200)
+      const curYear = new Date().getFullYear()
+      return {
+        baseInfo: { techName: '김기사', joinDate: '2020-03-01', year: curYear, totalLeave: 15, note: '' },
+        usages: [],
+        summary: { totalLeave: 15, usedLeave: 0, usedHalfDay: 0, totalUsed: 0, remaining: 15 },
+      }
+    }
+    return callApi('getMyLeaveInfo', { techId, year })
+  },
+
+  async getAllLeaveInfo(year) {
+    if (MOCK_MODE) { await mockDelay(200); return [] }
+    return callApiCached('getAllLeaveInfo', { year }, `getAllLeaveInfo_${year || ''}`)
+  },
+
+  async getAllLeaveSchedules() {
+    if (MOCK_MODE) { await mockDelay(200); return [] }
+    return callApiCached('getAllLeaveSchedules', {}, 'getAllLeaveSchedules')
+  },
+
   async getDashcamPhotos(techName, year, month) {
     if (MOCK_MODE) {
       await mockDelay(300)

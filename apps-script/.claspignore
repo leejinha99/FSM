@@ -1,0 +1,5 @@
+# rootDir(apps-script) 안에서 push할 파일만 허용
+**/**
+!Code.gs
+!setup.gs
+!appsscript.json

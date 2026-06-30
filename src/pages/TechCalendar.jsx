@@ -23,6 +23,30 @@ const VISIT_TYPE_BADGE = {
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
 
+
+// ─── 연차 범위 계산 ─────────────────────────────────────────────────────────
+
+function buildLeaveRanges(schedules) {
+  const byTech = {}
+  schedules.forEach(s => {
+    if (!byTech[s.techName]) byTech[s.techName] = []
+    byTech[s.techName].push(s.date)
+  })
+  const ranges = []
+  Object.entries(byTech).forEach(([techName, dates]) => {
+    dates.sort()
+    let rangeStart = dates[0], rangeEnd = dates[0]
+    for (let i = 1; i < dates.length; i++) {
+      const prev = dayjs(dates[i - 1])
+      const curr = dayjs(dates[i])
+      if (curr.diff(prev, 'day') === 1) { rangeEnd = dates[i] }
+      else { ranges.push({ techName, start: rangeStart, end: rangeEnd }); rangeStart = dates[i]; rangeEnd = dates[i] }
+    }
+    ranges.push({ techName, start: rangeStart, end: rangeEnd })
+  })
+  return ranges
+}
+
 // ─── 방문 카드 ──────────────────────────────────────────────────────────────
 
 function getContractColor(visit) {
@@ -63,9 +87,8 @@ function VisitCard({ visit, compact = false, onEdit }) {
 
 // ─── 월간 뷰 ────────────────────────────────────────────────────────────────
 
-function MonthView({ currentDate, visitsByDate, selectedDate, onSelectDate }) {
+function MonthView({ currentDate, visitsByDate, selectedDate, onSelectDate, leavesByDate }) {
   const gridStart = currentDate.startOf('month').startOf('week')
-  const cells = Array.from({ length: 42 }, (_, i) => gridStart.add(i, 'day'))
   const todayStr = dayjs().format('YYYY-MM-DD')
 
   return (
@@ -80,65 +103,137 @@ function MonthView({ currentDate, visitsByDate, selectedDate, onSelectDate }) {
         ))}
       </div>
 
-      {/* 날짜 셀 */}
-      <div className="grid grid-cols-7">
-        {cells.map((day, i) => {
+      {/* 주차별 렌더링 */}
+      {Array.from({ length: 6 }, (_, weekIdx) => {
+        const weekStart = gridStart.add(weekIdx * 7, 'day')
+        const days = Array.from({ length: 7 }, (_, i) => weekStart.add(i, 'day'))
+
+        // 이 주에 연차가 있는 기사 목록
+        const leaveTechsInWeek = []
+        const seenTechs = new Set()
+        days.forEach(day => {
           const dateStr = day.format('YYYY-MM-DD')
-          const isCurrentMonth = day.month() === currentDate.month()
-          const isToday = dateStr === todayStr
-          const isSelected = dateStr === selectedDate?.format('YYYY-MM-DD')
-          const dayVisits = visitsByDate[dateStr] || []
-          const col = i % 7
+          ;(leavesByDate?.[dateStr] || []).forEach(techName => {
+            if (!seenTechs.has(techName)) { seenTechs.add(techName); leaveTechsInWeek.push(techName) }
+          })
+        })
 
-          return (
-            <button
-              key={dateStr}
-              onClick={() => onSelectDate(day)}
-              className={`min-h-[3.5rem] px-1 pt-1 pb-1.5 flex flex-col items-center border-b border-gray-100
-                ${isSelected && !isToday ? 'bg-blue-50' : ''}
-                ${!isCurrentMonth ? 'opacity-35' : ''}
-                active:bg-gray-100 transition-colors`}
-            >
-              <span className={`w-7 h-7 flex items-center justify-center rounded-full text-sm leading-none
-                ${isToday ? 'bg-blue-600 text-white font-bold' : ''}
-                ${col === 0 && !isToday ? 'text-red-500' : ''}
-                ${col === 6 && !isToday ? 'text-blue-500' : ''}
-                ${!isToday && col !== 0 && col !== 6 ? 'text-gray-800' : ''}`}>
-                {day.date()}
-              </span>
+        return (
+          <div key={weekIdx}>
+            {/* 연차 스팬 바 */}
+            {leaveTechsInWeek.map(techName => (
+              <div key={techName} className="grid grid-cols-7">
+                {days.map((day, i) => {
+                  const dateStr = day.format('YYYY-MM-DD')
+                  const hasLeave = (leavesByDate?.[dateStr] || []).includes(techName)
+                  if (!hasLeave) return <div key={dateStr} className="h-4" />
+                  const prevDate = day.subtract(1, 'day').format('YYYY-MM-DD')
+                  const nextDate = day.add(1, 'day').format('YYYY-MM-DD')
+                  const prevHas = i > 0 && (leavesByDate?.[prevDate] || []).includes(techName)
+                  const nextHas = i < 6 && (leavesByDate?.[nextDate] || []).includes(techName)
+                  return (
+                    <div key={dateStr} className="h-4 flex items-center px-px">
+                      <div className={`flex-1 h-3 bg-gray-300 flex items-center overflow-hidden ${!prevHas ? 'rounded-l-full pl-1' : ''} ${!nextHas ? 'rounded-r-full' : ''}`}>
+                        {!prevHas && <span className="text-[8px] text-gray-600 font-medium truncate leading-none whitespace-nowrap">{techName} 연차</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
 
-              {/* 방문 점 */}
-              {dayVisits.length > 0 && (
-                <div className="flex gap-0.5 flex-wrap justify-center mt-0.5">
-                  {dayVisits.slice(0, 3).map(v => (
-                    <span key={v.visitId}
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        v.status === '완료' ? 'bg-gray-400' :
-                        (v.contractType === '유지관리' || v.contractType === '계약') ? 'bg-blue-500' : 'bg-orange-500'
-                      }`} />
-                  ))}
-                  {dayVisits.length > 3 && (
-                    <span className="text-gray-400 leading-none" style={{ fontSize: '8px' }}>+{dayVisits.length - 3}</span>
-                  )}
-                </div>
-              )}
-            </button>
-          )
-        })}
-      </div>
+            {/* 날짜 셀 */}
+            <div className="grid grid-cols-7">
+              {days.map((day, i) => {
+                const dateStr = day.format('YYYY-MM-DD')
+                const isCurrentMonth = day.month() === currentDate.month()
+                const isToday = dateStr === todayStr
+                const isSelected = dateStr === selectedDate?.format('YYYY-MM-DD')
+                const dayVisits = visitsByDate[dateStr] || []
+                const col = i % 7
+
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => onSelectDate(day)}
+                    className={`min-h-[3.5rem] px-1 pt-1 pb-1.5 flex flex-col items-center border-b border-gray-100
+                      ${isSelected && !isToday ? 'bg-blue-50' : ''}
+                      ${!isCurrentMonth ? 'opacity-35' : ''}
+                      active:bg-gray-100 transition-colors`}
+                  >
+                    <span className={`w-7 h-7 flex items-center justify-center rounded-full text-sm leading-none
+                      ${isToday ? 'bg-blue-600 text-white font-bold' : ''}
+                      ${col === 0 && !isToday ? 'text-red-500' : ''}
+                      ${col === 6 && !isToday ? 'text-blue-500' : ''}
+                      ${!isToday && col !== 0 && col !== 6 ? 'text-gray-800' : ''}`}>
+                      {day.date()}
+                    </span>
+
+                    {/* 방문 점 */}
+                    {dayVisits.length > 0 && (
+                      <div className="flex gap-0.5 flex-wrap justify-center mt-0.5">
+                        {dayVisits.slice(0, 3).map(v => (
+                          <span key={v.visitId}
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              v.status === '완료' ? 'bg-gray-400' :
+                              (v.contractType === '유지관리' || v.contractType === '계약') ? 'bg-blue-500' : 'bg-orange-500'
+                            }`} />
+                        ))}
+                        {dayVisits.length > 3 && (
+                          <span className="text-gray-400 leading-none" style={{ fontSize: '8px' }}>+{dayVisits.length - 3}</span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
 // ─── 주간 뷰 ────────────────────────────────────────────────────────────────
 
-function WeekView({ currentDate, visitsByDate, onEdit }) {
+function WeekView({ currentDate, visitsByDate, leaveRanges, onEdit }) {
   const weekStart = currentDate.startOf('week')
+  const weekStartStr = weekStart.format('YYYY-MM-DD')
+  const weekEndStr = weekStart.add(6, 'day').format('YYYY-MM-DD')
   const days = Array.from({ length: 7 }, (_, i) => weekStart.add(i, 'day'))
   const todayStr = dayjs().format('YYYY-MM-DD')
 
+  // 이 주와 겹치는 연차 스팬
+  const leaveSpans = (leaveRanges || []).flatMap(range => {
+    const os = range.start > weekStartStr ? range.start : weekStartStr
+    const oe = range.end < weekEndStr ? range.end : weekEndStr
+    if (os > oe) return []
+    return [{ techName: range.techName, startCol: dayjs(os).day(), endCol: dayjs(oe).day() }]
+  })
+
   return (
     <div className="overflow-x-auto scrollbar-hide">
+      {/* 연차 스팬 바 (all-day row) */}
+      {leaveSpans.length > 0 && (
+        <div className="px-3 pt-2 pb-1 min-w-max">
+          {leaveSpans.map((span, i) => (
+            <div
+              key={i}
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 9rem)', gap: '0.5rem' }}
+              className="mb-0.5"
+            >
+              <div
+                style={{ gridColumn: `${span.startCol + 1} / ${span.endCol + 2}` }}
+                className="bg-gray-300 text-gray-600 text-[10px] font-medium rounded-full px-2 py-0.5 truncate text-center"
+              >
+                {span.techName} 연차
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex gap-2 px-3 py-3 min-w-max">
         {days.map((day, i) => {
           const dateStr = day.format('YYYY-MM-DD')
@@ -597,6 +692,18 @@ export default function TechCalendar() {
   const [error, setError] = useState('')
   const [showCreateAS, setShowCreateAS] = useState(false)
   const [showVisitModal, setShowVisitModal] = useState(false)
+  const [leaveSchedules, setLeaveSchedules] = useState([])
+
+  const leaveRanges = useMemo(() => buildLeaveRanges(leaveSchedules), [leaveSchedules])
+
+  const leavesByDate = useMemo(() => {
+    const map = {}
+    leaveSchedules.forEach(s => {
+      if (!map[s.date]) map[s.date] = []
+      if (!map[s.date].includes(s.techName)) map[s.date].push(s.techName)
+    })
+    return map
+  }, [leaveSchedules])
 
   const visitsByDate = useMemo(() => {
     return visits.reduce((acc, v) => {
@@ -650,6 +757,11 @@ export default function TechCalendar() {
   useEffect(() => {
     fetchVisits()
   }, [fetchVisits])
+
+  useEffect(() => {
+    if (!user) return
+    api.getAllLeaveSchedules().then(d => setLeaveSchedules(d || [])).catch(() => {})
+  }, [user])
 
   function handleEditVisit(visit) {
     if (visit.isAS) {
@@ -827,6 +939,7 @@ export default function TechCalendar() {
                 visitsByDate={visitsByDate}
                 selectedDate={selectedDate}
                 onSelectDate={setSelectedDate}
+                leavesByDate={leavesByDate}
               />
               {/* ── 구분선 ─────────────────────────────────── */}
               <div className="h-2 bg-gray-100 border-y border-gray-200" />
@@ -835,7 +948,7 @@ export default function TechCalendar() {
             </>
           )}
           {viewMode === 'week' && (
-            <WeekView currentDate={currentDate} visitsByDate={visitsByDate} onEdit={handleEditVisit} />
+            <WeekView currentDate={currentDate} visitsByDate={visitsByDate} leaveRanges={leaveRanges} onEdit={handleEditVisit} />
           )}
           {viewMode === 'list' && (
             <ListView visitsByDate={visitsByDate} currentDate={currentDate} onEdit={handleEditVisit} />

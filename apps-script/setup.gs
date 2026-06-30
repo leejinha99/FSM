@@ -111,7 +111,7 @@ function setupKeepWarmTrigger() {
     .everyMinutes(5)
     .create();
 
-  SpreadsheetApp.getUi().alert('✅ Keep-warm 트리거 설정 완료!\n\n5분마다 자동으로 스크립트가 활성 상태를 유지합니다.\n콜드 스타트 지연이 크게 줄어듭니다.');
+  console.log('Keep-warm 트리거 설정 완료 — 5분마다 자동 활성화');
 }
 
 function pingKeepWarm() {

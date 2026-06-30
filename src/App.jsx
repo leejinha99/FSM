@@ -16,6 +16,7 @@ import AdminVisits from './pages/admin/AdminVisits.jsx'
 import AdminAS from './pages/admin/AdminAS.jsx'
 import AdminTechSchedule from './pages/admin/AdminTechSchedule.jsx'
 import AdminStock from './pages/admin/AdminStock.jsx'
+import AdminLeave from './pages/admin/AdminLeave.jsx'
 import TechManaged from './pages/TechManaged.jsx'
 import TechVehicle from './pages/TechVehicle.jsx'
 import ReloadPrompt from './components/ReloadPrompt.jsx'
@@ -68,6 +69,7 @@ export default function App() {
               <Route path="as" element={<AdminAS />} />
               <Route path="tech-schedule" element={<AdminTechSchedule />} />
               <Route path="stock" element={<AdminStock />} />
+              <Route path="leave" element={<AdminLeave />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

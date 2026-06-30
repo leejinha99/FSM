@@ -27,8 +27,141 @@ function resizeImage(file, maxWidth = 1200, quality = 0.8) {
   })
 }
 
-export default function TechVehicle() {
-  const { user } = useAuth()
+// ── 연차 탭 ─────────────────────────────────────────────────────────────────
+
+function LeaveTab({ user }) {
+  const curYear = new Date().getFullYear()
+  const [year, setYear] = useState(curYear)
+  const [leaveData, setLeaveData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    api.getMyLeaveInfo(user.techId, year)
+      .then(d => setLeaveData(d))
+      .catch(() => setLeaveData(null))
+      .finally(() => setLoading(false))
+  }, [user.techId, year])
+
+  const TYPE_STYLE = {
+    '연차':    'bg-gray-100 text-gray-600',
+    '오전반차': 'bg-blue-50 text-blue-600',
+    '오후반차': 'bg-orange-50 text-orange-600',
+    '유급':    'bg-emerald-50 text-emerald-600',
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <svg className="animate-spin w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+      </div>
+    )
+  }
+
+  if (!leaveData) {
+    return <p className="text-center text-gray-400 text-sm py-16">연차 정보를 불러올 수 없습니다.</p>
+  }
+
+  const { baseInfo, usages, summary } = leaveData
+
+  return (
+    <div className="px-4 pt-4 pb-6 space-y-4">
+      {/* 연도 선택 */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setYear(y => y - 1)}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <span className="text-base font-bold text-gray-800 flex-1 text-center">{year}년</span>
+        <button
+          onClick={() => setYear(y => y + 1)}
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
+          disabled={year >= curYear}
+        >
+          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* 현황 카드 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        {baseInfo.joinDate && (
+          <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+            <span className="text-xs text-gray-500">입사일</span>
+            <span className="text-sm font-semibold text-gray-800">{baseInfo.joinDate}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gray-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-gray-500 mb-1">총 연차</p>
+            <p className="text-2xl font-bold text-gray-800">{summary.totalLeave}<span className="text-sm font-normal ml-0.5">일</span></p>
+          </div>
+          <div className="bg-green-50 rounded-xl p-3 text-center">
+            <p className="text-xs text-green-600 mb-1">남은 연차</p>
+            <p className="text-2xl font-bold text-green-700">{summary.remaining}<span className="text-sm font-normal ml-0.5">일</span></p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          <div className="bg-gray-50 rounded-xl p-2.5 text-center">
+            <p className="text-[10px] text-gray-500 mb-0.5">연차 사용</p>
+            <p className="text-base font-bold text-gray-700">{summary.usedLeave}<span className="text-xs font-normal">일</span></p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-2.5 text-center">
+            <p className="text-[10px] text-gray-500 mb-0.5">반차 사용</p>
+            <p className="text-base font-bold text-gray-700">{summary.usedHalfDay}<span className="text-xs font-normal">회</span></p>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-2.5 text-center">
+            <p className="text-[10px] text-gray-500 mb-0.5">합계 사용</p>
+            <p className="text-base font-bold text-gray-700">{summary.totalUsed}<span className="text-xs font-normal">일</span></p>
+          </div>
+        </div>
+      </div>
+
+      {/* 사용 내역 */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">사용 내역</h3>
+        {usages.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center">
+            <p className="text-gray-400 text-sm">사용 내역이 없습니다.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {usages.map((u, i) => {
+              const d = dayjs(u.date)
+              return (
+                <div key={i} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-sm font-semibold text-gray-800">
+                      {d.format('M월 D일')}
+                      <span className="ml-1 text-xs font-normal text-gray-400">({WEEKDAYS[d.day()]})</span>
+                    </span>
+                  </div>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${TYPE_STYLE[u.type] || 'bg-gray-100 text-gray-600'}`}>
+                    {u.type}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── 계기판 탭 (기존 차량관리 내용) ──────────────────────────────────────────
+
+function DashcamTab({ user }) {
   const [currentMonth, setCurrentMonth] = useState(() => dayjs().startOf('month'))
   const [photoMap, setPhotoMap] = useState({})
   const [loading, setLoading] = useState(true)
@@ -38,9 +171,7 @@ export default function TechVehicle() {
   const fileInputRef = useRef()
   const today = dayjs().format('YYYY-MM-DD')
 
-  useEffect(() => {
-    loadData()
-  }, [currentMonth])
+  useEffect(() => { loadData() }, [currentMonth])
 
   async function loadData() {
     setLoading(true)
@@ -49,11 +180,8 @@ export default function TechVehicle() {
       const map = {}
       data.forEach(d => { map[d.date] = { commute: d.commute, leave: d.leave } })
       setPhotoMap(map)
-    } catch {
-      // silent fail
-    } finally {
-      setLoading(false)
-    }
+    } catch { /* silent */ }
+    finally { setLoading(false) }
   }
 
   function handlePlusClick(dateStr) {
@@ -65,21 +193,13 @@ export default function TechVehicle() {
     setConfirm({ type, alreadyHas })
   }
 
-  function handleConfirmYes() {
-    setConfirm(null)
-    fileInputRef.current?.click()
-  }
-
-  function handleConfirmNo() {
-    setConfirm(null)
-    setPendingDate(null)
-  }
+  function handleConfirmYes() { setConfirm(null); fileInputRef.current?.click() }
+  function handleConfirmNo()  { setConfirm(null); setPendingDate(null) }
 
   async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file || !pendingDate) { e.target.value = ''; return }
     e.target.value = ''
-
     setUploading(true)
     try {
       const now = new Date()
@@ -87,26 +207,13 @@ export default function TechVehicle() {
       const timestamp = dayjs().format('YYYY.MM.DD HH:mm')
       const resized = await resizeImage(file)
       const base64 = resized.split(',')[1]
-
-      await api.saveDashcamPhoto({
-        techName: user.name,
-        base64Image: base64,
-        mimeType: 'image/jpeg',
-        timestamp,
-        date: pendingDate,
-        type,
-      })
-
+      await api.saveDashcamPhoto({ techName: user.name, base64Image: base64, mimeType: 'image/jpeg', timestamp, date: pendingDate, type })
       await loadData()
     } catch (err) {
       alert('사진 저장 중 오류가 발생했습니다.\n' + err.message)
-    } finally {
-      setUploading(false)
-      setPendingDate(null)
-    }
+    } finally { setUploading(false); setPendingDate(null) }
   }
 
-  // 캘린더 그리드 구성
   const firstDay = currentMonth.startOf('month').day()
   const daysInMonth = currentMonth.daysInMonth()
   const cells = []
@@ -114,49 +221,26 @@ export default function TechVehicle() {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d)
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 헤더 */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">차량관리</h1>
-        <span className="text-sm text-gray-500">{user.name}</span>
-      </div>
-
+    <div className="pb-4">
       {/* 월 네비게이션 */}
       <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100">
-        <button
-          onClick={() => setCurrentMonth(m => m.subtract(1, 'month'))}
-          className="p-2 hover:bg-gray-100 rounded-lg"
-        >
+        <button onClick={() => setCurrentMonth(m => m.subtract(1, 'month'))} className="p-2 hover:bg-gray-100 rounded-lg">
           <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <span className="text-base font-semibold text-gray-900">
-          {currentMonth.format('YYYY년 M월')}
-        </span>
-        <button
-          onClick={() => setCurrentMonth(m => m.add(1, 'month'))}
-          className="p-2 hover:bg-gray-100 rounded-lg"
-        >
+        <span className="text-base font-semibold text-gray-900">{currentMonth.format('YYYY년 M월')}</span>
+        <button onClick={() => setCurrentMonth(m => m.add(1, 'month'))} className="p-2 hover:bg-gray-100 rounded-lg">
           <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
       </div>
 
-      {/* 캘린더 */}
       <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        {/* 요일 헤더 */}
         <div className="grid grid-cols-7 bg-gray-50 border-b border-gray-100">
           {WEEKDAYS.map((d, i) => (
-            <div
-              key={d}
-              className={`text-center text-xs font-medium py-2 ${
-                i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'
-              }`}
-            >
-              {d}
-            </div>
+            <div key={d} className={`text-center text-xs font-medium py-2 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-500'}`}>{d}</div>
           ))}
         </div>
 
@@ -170,72 +254,25 @@ export default function TechVehicle() {
         ) : (
           <div className="grid grid-cols-7">
             {cells.map((day, idx) => {
-              if (!day) {
-                return (
-                  <div
-                    key={'empty-' + idx}
-                    className="min-h-[76px] border-b border-r border-gray-50"
-                  />
-                )
-              }
-
+              if (!day) return <div key={'empty-' + idx} className="min-h-[76px] border-b border-r border-gray-50" />
               const dateStr = currentMonth.date(day).format('YYYY-MM-DD')
               const isToday = dateStr === today
               const isFuture = dateStr > today
               const isSunday = idx % 7 === 0
               const isSaturday = idx % 7 === 6
               const photo = photoMap[dateStr] || {}
-              const hasCommute = !!photo.commute
-              const hasLeave = !!photo.leave
-
               return (
-                <div
-                  key={dateStr}
-                  className={`min-h-[76px] border-b border-r border-gray-50 p-1 flex flex-col ${
-                    isToday ? 'bg-blue-50' : ''
-                  }`}
-                >
-                  {/* 날짜 숫자 */}
+                <div key={dateStr} className={`min-h-[76px] border-b border-r border-gray-50 p-1 flex flex-col ${isToday ? 'bg-blue-50' : ''}`}>
                   <div className="flex justify-center mb-0.5">
-                    <span
-                      className={`text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full ${
-                        isToday
-                          ? 'bg-blue-600 text-white text-[11px]'
-                          : isSunday
-                          ? 'text-red-500'
-                          : isSaturday
-                          ? 'text-blue-500'
-                          : 'text-gray-700'
-                      }`}
-                    >
-                      {day}
-                    </span>
+                    <span className={`text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white text-[11px]' : isSunday ? 'text-red-500' : isSaturday ? 'text-blue-500' : 'text-gray-700'}`}>{day}</span>
                   </div>
-
-                  {/* 상태 뱃지 */}
                   <div className="flex flex-col gap-0.5 flex-1 items-stretch">
-                    {hasCommute && (
-                      <span className="text-[9px] font-medium bg-teal-100 text-teal-700 rounded px-0.5 py-0.5 text-center leading-tight">
-                        출근완료
-                      </span>
-                    )}
-                    {hasLeave && (
-                      <span className="text-[9px] font-medium bg-orange-100 text-orange-600 rounded px-0.5 py-0.5 text-center leading-tight">
-                        퇴근완료
-                      </span>
-                    )}
+                    {photo.commute && <span className="text-[9px] font-medium bg-teal-100 text-teal-700 rounded px-0.5 py-0.5 text-center leading-tight">출근완료</span>}
+                    {photo.leave   && <span className="text-[9px] font-medium bg-orange-100 text-orange-600 rounded px-0.5 py-0.5 text-center leading-tight">퇴근완료</span>}
                   </div>
-
-                  {/* + 버튼 (오늘만) */}
                   {isToday && !isFuture && (
                     <div className="flex justify-center mt-0.5">
-                      <button
-                        onClick={() => handlePlusClick(dateStr)}
-                        disabled={uploading}
-                        className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-base font-bold hover:bg-blue-700 disabled:opacity-50 leading-none"
-                      >
-                        +
-                      </button>
+                      <button onClick={() => handlePlusClick(dateStr)} disabled={uploading} className="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-base font-bold hover:bg-blue-700 disabled:opacity-50 leading-none">+</button>
                     </div>
                   )}
                 </div>
@@ -245,76 +282,31 @@ export default function TechVehicle() {
         )}
       </div>
 
-      {/* 범례 */}
       <div className="mx-3 mt-3 flex gap-4 px-1">
-        <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded bg-teal-100 border border-teal-300 inline-block" />
-          <span className="text-xs text-gray-500">출근완료</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded bg-orange-100 border border-orange-300 inline-block" />
-          <span className="text-xs text-gray-500">퇴근완료</span>
-        </div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-teal-100 border border-teal-300 inline-block" /><span className="text-xs text-gray-500">출근완료</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-orange-100 border border-orange-300 inline-block" /><span className="text-xs text-gray-500">퇴근완료</span></div>
       </div>
+      <p className="mx-3 mt-2 px-1 text-xs text-gray-400">오늘 날짜의 + 버튼을 눌러 계기판 사진을 촬영하세요. 오전 12시 이전은 출근, 이후는 퇴근으로 등록됩니다.</p>
 
-      {/* 안내 문구 */}
-      <p className="mx-3 mt-2 px-1 text-xs text-gray-400">
-        오늘 날짜의 + 버튼을 눌러 계기판 사진을 촬영하세요. 오전 12시 이전은 출근, 이후는 퇴근으로 등록됩니다.
-      </p>
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ display: 'none' }} />
 
-      {/* 숨김 파일 입력 */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFileChange}
-        style={{ display: 'none' }}
-      />
-
-      {/* 촬영 확인 모달 */}
       {confirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-6">
           <div className="bg-white rounded-2xl p-6 w-full max-w-xs shadow-xl">
             <h3 className="text-base font-semibold text-gray-900 mb-2">촬영하시겠습니까?</h3>
             <p className="text-sm text-gray-600 mb-1">
-              <span
-                className={
-                  confirm.type === '출근'
-                    ? 'text-teal-600 font-semibold'
-                    : 'text-orange-500 font-semibold'
-                }
-              >
-                {confirm.type} 사진
-              </span>
-              으로 등록됩니다.
+              <span className={confirm.type === '출근' ? 'text-teal-600 font-semibold' : 'text-orange-500 font-semibold'}>{confirm.type} 사진</span>으로 등록됩니다.
             </p>
-            {confirm.alreadyHas ? (
-              <p className="text-xs text-red-500 mb-4">
-                이미 {confirm.type} 사진이 있습니다. 덮어쓰시겠습니까?
-              </p>
-            ) : (
-              <div className="mb-4" />
-            )}
+            {confirm.alreadyHas && <p className="text-xs text-red-500 mb-4">이미 {confirm.type} 사진이 있습니다. 덮어쓰시겠습니까?</p>}
+            <div className={confirm.alreadyHas ? '' : 'mb-4'} />
             <div className="flex gap-3">
-              <button
-                onClick={handleConfirmNo}
-                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 font-medium"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleConfirmYes}
-                className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold"
-              >
-                확인
-              </button>
+              <button onClick={handleConfirmNo} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 font-medium">취소</button>
+              <button onClick={handleConfirmYes} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold">확인</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 업로드 중 오버레이 */}
       {uploading && (
         <div className="fixed inset-0 bg-black/60 flex flex-col items-center justify-center z-50">
           <svg className="animate-spin w-10 h-10 text-white mb-3" fill="none" viewBox="0 0 24 24">
@@ -325,6 +317,41 @@ export default function TechVehicle() {
           <p className="text-white/70 text-xs mt-1">잠시만 기다려주세요</p>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── 메인 페이지 ─────────────────────────────────────────────────────────────
+
+export default function TechVehicle() {
+  const { user } = useAuth()
+  const [tab, setTab] = useState('leave')
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* 헤더 */}
+      <div className="bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-gray-900">근태관리</h1>
+        <span className="text-sm text-gray-500">{user.name}</span>
+      </div>
+
+      {/* 탭 */}
+      <div className="bg-white px-4 py-2 border-b border-gray-100">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+          {[['leave', '연차'], ['dashcam', '계기판']].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${tab === key ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === 'leave'   && <LeaveTab user={user} />}
+      {tab === 'dashcam' && <DashcamTab user={user} />}
     </div>
   )
 }

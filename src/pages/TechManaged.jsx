@@ -130,9 +130,10 @@ export default function TechManaged() {
     const map = {}
     visits.forEach(v => {
       const mk = dayjs(v.visitDate).format('YYYY-MM')
-      if (!map[v.schoolId]) map[v.schoolId] = {}
-      if (!map[v.schoolId][mk]) map[v.schoolId][mk] = []
-      map[v.schoolId][mk].push(v)
+      const sk = normName(v.schoolName)
+      if (!map[sk]) map[sk] = {}
+      if (!map[sk][mk]) map[sk][mk] = []
+      map[sk][mk].push(v)
     })
     return map
   }, [visits])
@@ -254,7 +255,7 @@ export default function TechManaged() {
                       {stats?.exemptMonth || '-'}
                     </td>
                     {MONTHS.map(m => {
-                      const cellVisits = visitMap[school.schoolId]?.[m.key] || []
+                      const cellVisits = visitMap[normName(school.name)]?.[m.key] || []
                       const isExempt = exemptSet.has(m.month)
                       const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
                       return (

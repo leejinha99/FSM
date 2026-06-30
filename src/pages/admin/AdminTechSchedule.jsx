@@ -3,6 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { api } from '../../api/sheetsApi.js'
 
+// 학교명 매칭용 정규화: 공백/줄바꿈 제거
+function normName(s) {
+  return String(s == null ? '' : s).replace(/\s+/g, '')
+}
+
 const YEAR_OPTIONS = [2025, 2026, 2027, 2028, 2029, 2030]
 const VIEW_MODES = ['기사별', '지역별', '일별']
 const DAY_KO = ['일', '월', '화', '수', '목', '금', '토']
@@ -81,7 +86,7 @@ function SchoolMatrix({ schools, visitMap, MONTHS, onSchoolClick, onCellClick })
                 {school.name}
               </td>
               {MONTHS.map(m => {
-                const cellVisits = visitMap[school.schoolId]?.[m.key] || []
+                const cellVisits = visitMap[normName(school.name)]?.[m.key] || []
                 const isCurrentMonth = m.key === dayjs().format('YYYY-MM')
                 return (
                   <td
@@ -197,9 +202,10 @@ export default function AdminTechSchedule() {
     const map = {}
     visits.forEach(v => {
       const mk = dayjs(v.visitDate).format('YYYY-MM')
-      if (!map[v.schoolId]) map[v.schoolId] = {}
-      if (!map[v.schoolId][mk]) map[v.schoolId][mk] = []
-      map[v.schoolId][mk].push(v)
+      const sk = normName(v.schoolName)
+      if (!map[sk]) map[sk] = {}
+      if (!map[sk][mk]) map[sk][mk] = []
+      map[sk][mk].push(v)
     })
     return map
   }, [visits])
@@ -208,9 +214,10 @@ export default function AdminTechSchedule() {
     const map = {}
     allVisits.forEach(v => {
       const mk = dayjs(v.visitDate).format('YYYY-MM')
-      if (!map[v.schoolId]) map[v.schoolId] = {}
-      if (!map[v.schoolId][mk]) map[v.schoolId][mk] = []
-      map[v.schoolId][mk].push(v)
+      const sk = normName(v.schoolName)
+      if (!map[sk]) map[sk] = {}
+      if (!map[sk][mk]) map[sk][mk] = []
+      map[sk][mk].push(v)
     })
     return map
   }, [allVisits])

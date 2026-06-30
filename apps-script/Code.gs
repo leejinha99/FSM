@@ -235,10 +235,12 @@ function handleGetMyVisits(data) {
   var schoolMap = {};
   var sRows = schoolSheet.getDataRange().getValues();
   for (var si = 1; si < sRows.length; si++) {
-    schoolMap[String(sRows[si][0])] = {
+    var sInfo = {
       name:         String(sRows[si][5]),
       contractType: String(sRows[si][9] || ''),
     };
+    schoolMap[String(sRows[si][0])] = sInfo;
+    schoolMap['#' + normName(sRows[si][5])] = sInfo;
   }
 
   var rows = visitSheet.getDataRange().getValues();
@@ -250,18 +252,18 @@ function handleGetMyVisits(data) {
     var techId    = String(r[6]);
     var visitDate = formatDate(r[1]);
 
-    if (techId !== data.techId) continue;
+    if (getTechNameById(techId) !== getTechNameById(data.techId)) continue;
     if (visitDate < data.start || visitDate > data.end) continue;
 
     var schoolId   = String(r[4]);
-    var schoolInfo = schoolMap[schoolId] || {};
+    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
     result.push({
       visitId:      String(r[0]),
       visitDate:    visitDate,
       visitTime:    formatTime(r[2]),
       alertSetting: String(r[3]),
       schoolId:     schoolId,
-      schoolName:   schoolInfo.name || '',
+      schoolName:   schoolInfo.name || schoolId,
       contractType: schoolInfo.contractType || '',
       techId:       techId,
       visitType:    String(r[7]),
@@ -288,7 +290,7 @@ function handleGetMySchools(data) {
     var r = rows[i];
     if (String(r[1]).trim() !== techName) continue;
     result.push({
-      schoolId:            String(r[0]),
+      schoolId:            String(r[0]).trim() || String(r[5]).trim(),
       techId:              String(r[1]),
       contact:             String(r[2]),
       contractor:          String(r[3] || ''),
@@ -680,7 +682,7 @@ function handleGetAllSchools(data) {
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
     result.push({
-      schoolId:            String(r[0]),
+      schoolId:            String(r[0]).trim() || String(r[5]).trim(),
       techId:              String(r[1]),
       contact:             String(r[2]),
       contractor:          String(r[3] || ''),
@@ -726,6 +728,7 @@ function handleGetAllVisits(data) {
   var schoolMap = {};
   sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
     schoolMap[s['학교ID']] = s['학교명'];
+    schoolMap['#' + normName(s['학교명'])] = s['학교명'];
   });
   var techMap = {};
   sheetToObjects(ss.getSheetByName('기사')).forEach(function(t) {
@@ -742,16 +745,16 @@ function handleGetAllVisits(data) {
     var techId    = String(r[6]);
 
     if (visitDate < data.start || visitDate > data.end) continue;
-    if (data.techId && techId !== data.techId) continue;
+    if (data.techId && getTechNameById(techId) !== getTechNameById(data.techId)) continue;
 
     result.push({
       visitId:     String(r[0]),
       visitDate:   visitDate,
       visitTime:   formatTime(r[2]),
       schoolId:    String(r[4]),
-      schoolName:  schoolMap[String(r[4])] || '',
+      schoolName:  schoolMap[String(r[4])] || schoolMap['#' + normName(String(r[4]))] || String(r[4]),
       techId:      techId,
-      techName:    techMap[techId] || '',
+      techName:    techMap[techId] || techId,
       visitType:   String(r[7]),
       workContent: String(r[8]),
       nextScheduledDate: formatDate(r[9]),
@@ -767,7 +770,9 @@ function handleGetAllAS(data) {
   var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
   sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
-    schoolMap[s['학교ID']] = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
+    var sInfo = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
+    schoolMap[s['학교ID']] = sInfo;
+    schoolMap['#' + normName(s['학교명'])] = sInfo;
   });
   var techMap = {};
   sheetToObjects(ss.getSheetByName('기사')).forEach(function(t) {
@@ -783,7 +788,7 @@ function handleGetAllAS(data) {
     var r = rows[i];
     var assignedTechId = String(r[4]);
     var schoolId = String(r[1]);
-    var schoolInfo = schoolMap[schoolId] || {};
+    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
     var schoolNameManual = String(r[13] || '');
     var paymentInfoRaw = String(r[11] || '');
     var paymentInfo = {};
@@ -791,11 +796,11 @@ function handleGetAllAS(data) {
     result.push({
       asId:              String(r[0]),
       schoolId:          schoolId,
-      schoolName:        schoolNameManual || schoolInfo.name || '',
+      schoolName:        schoolNameManual || schoolInfo.name || schoolId,
       reportedDate:      formatDate(r[2]),
       symptom:           String(r[3]),
       assignedTechId:    assignedTechId,
-      assignedTechName:  techMap[assignedTechId] || '',
+      assignedTechName:  techMap[assignedTechId] || assignedTechId,
       status:            String(r[5]),
       note:              String(r[6] || ''),
       contractType:      String(r[7] || ''),
@@ -822,9 +827,9 @@ function handleSaveSchool(data) {
 
   if (data.schoolId) {
     for (var i = 1; i < rows.length; i++) {
-      if (String(rows[i][0]) === data.schoolId) {
+      if (String(rows[i][0]) === data.schoolId || normName(rows[i][5]) === normName(data.schoolId)) {
         sheet.getRange(i + 1, 1, 1, 13).setValues([[
-          data.schoolId,
+          rows[i][0],
           data.techId       || '',
           data.contact      || '',
           rows[i][3],
@@ -907,7 +912,9 @@ function handleGetMyAS(data) {
   var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
   sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
-    schoolMap[s['학교ID']] = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
+    var sInfo = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
+    schoolMap[s['학교ID']] = sInfo;
+    schoolMap['#' + normName(s['학교명'])] = sInfo;
   });
 
   var rows = ss.getSheetByName('AS접수').getDataRange().getValues();
@@ -916,9 +923,9 @@ function handleGetMyAS(data) {
   var result = [];
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
-    if (String(r[4]) !== data.techId) continue;
+    if (getTechNameById(String(r[4])) !== getTechNameById(data.techId)) continue;
     var schoolId = String(r[1]);
-    var schoolInfo = schoolMap[schoolId] || {};
+    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
     var schoolNameManual = String(r[13] || '');
     var paymentInfoRaw = String(r[11] || '');
     var paymentInfo = {};
@@ -926,7 +933,7 @@ function handleGetMyAS(data) {
     result.push({
       asId:              String(r[0]),
       schoolId:          schoolId,
-      schoolName:        schoolNameManual || schoolInfo.name || '',
+      schoolName:        schoolNameManual || schoolInfo.name || schoolId,
       reportedDate:      formatDate(r[2]),
       symptom:           String(r[3]),
       assignedTechId:    String(r[4]),
@@ -1064,7 +1071,7 @@ function handleSaveASPayment(data) {
         var schoolSheet = getSchoolSheet(getCurrentMgmtYear());
         var sRows = schoolSheet.getDataRange().getValues();
         for (var j = 1; j < sRows.length; j++) {
-          if (String(sRows[j][0]) !== data.schoolId) continue;
+          if (String(sRows[j][0]) !== data.schoolId && normName(sRows[j][5]) !== normName(data.schoolId)) continue;
           if (data.bizNumber) schoolSheet.getRange(j + 1, 11).setValue(data.bizNumber);
           if (data.email)     schoolSheet.getRange(j + 1, 9).setValue(data.email);
           break;
@@ -1139,7 +1146,9 @@ function handleGetASInvoices(data) {
   var year = data.year || getCurrentMgmtYear();
   var schoolMap = {};
   sheetToObjects(getSchoolSheet(year)).forEach(function(s) {
-    schoolMap[s['학교ID']] = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
+    var sInfo = { name: s['학교명'], bizNumber: s['사업자번호'] || '', email: s['학교이메일'] || '' };
+    schoolMap[s['학교ID']] = sInfo;
+    schoolMap['#' + normName(s['학교명'])] = sInfo;
   });
   var techMap = {};
   sheetToObjects(ss.getSheetByName('기사')).forEach(function(t) {
@@ -1154,7 +1163,7 @@ function handleGetASInvoices(data) {
     var r = rows[i];
     if (String(r[5]) !== '발행대기') continue;
     var schoolId = String(r[1]);
-    var schoolInfo = schoolMap[schoolId] || {};
+    var schoolInfo = schoolMap[schoolId] || schoolMap['#' + normName(schoolId)] || {};
     var schoolNameManual = String(r[13] || '');
     var paymentInfoRaw = String(r[11] || '');
     var paymentInfo = {};
@@ -1162,11 +1171,11 @@ function handleGetASInvoices(data) {
     result.push({
       asId:             String(r[0]),
       schoolId:         schoolId,
-      schoolName:       schoolNameManual || schoolInfo.name || '',
+      schoolName:       schoolNameManual || schoolInfo.name || schoolId,
       reportedDate:     formatDate(r[2]),
       symptom:          String(r[3]),
       assignedTechId:   String(r[4]),
-      assignedTechName: techMap[String(r[4])] || '',
+      assignedTechName: techMap[String(r[4])] || String(r[4]),
       status:           String(r[5]),
       note:             String(r[6] || ''),
       contractType:     String(r[7] || ''),
@@ -1328,7 +1337,7 @@ function handleSaveEstimate(data) {
         var schoolSheet = getSchoolSheet(getCurrentMgmtYear());
         var sRows = schoolSheet.getDataRange().getValues();
         for (var j = 1; j < sRows.length; j++) {
-          if (String(sRows[j][0]) === data.schoolId) {
+          if (String(sRows[j][0]) === data.schoolId || normName(sRows[j][5]) === normName(data.schoolId)) {
             schoolSheet.getRange(j + 1, 9).setValue(data.schoolEmail);
             break;
           }

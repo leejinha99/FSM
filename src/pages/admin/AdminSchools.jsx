@@ -94,7 +94,7 @@ function SchoolEditModal({ school, techs, schools: allSchools, onSave, onClose }
           <Field label="담당 기사">
             <select value={form.techId} onChange={e => handleTechChange(e.target.value)} className={INPUT}>
               <option value="">미배정</option>
-              {techs.map(t => <option key={t.techId} value={t.techId}>{t.name}</option>)}
+              {techs.map(t => <option key={t.techId} value={t.name}>{t.name}</option>)}
             </select>
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -269,8 +269,6 @@ export default function AdminSchools() {
 
   useEffect(() => { load() }, [])
 
-  const techMap = useMemo(() => Object.fromEntries(techs.map(t => [t.techId, t.name])), [techs])
-
   const regions = useMemo(() => {
     const source = techFilter ? schools.filter(s => s.techId === techFilter) : schools
     const set = new Set(source.map(s => s.region).filter(Boolean))
@@ -316,7 +314,7 @@ export default function AdminSchools() {
             className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:border-blue-400"
           >
             <option value="">담당자 전체</option>
-            {techs.map(t => <option key={t.techId} value={t.techId}>{t.name}</option>)}
+            {techs.map(t => <option key={t.techId} value={t.name}>{t.name}</option>)}
           </select>
           <select
             value={regionFilter}
@@ -358,8 +356,8 @@ export default function AdminSchools() {
                         <div className="min-w-0">
                           <p className="font-medium text-gray-800 text-sm truncate">{s.name}</p>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {techMap[s.techId]
-                              ? <span>{techMap[s.techId]}</span>
+                            {s.techId
+                              ? <span>{s.techId}</span>
                               : <span className="text-gray-300">미배정</span>}
                           </p>
                         </div>
@@ -401,7 +399,7 @@ export default function AdminSchools() {
                         <td className="px-4 py-3 text-sm font-medium text-gray-800">{s.name}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{s.region || '-'}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {techMap[s.techId] || <span className="text-gray-300">미배정</span>}
+                          {s.techId || <span className="text-gray-300">미배정</span>}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CONTRACT_BADGE[s.contractType] || 'bg-gray-100 text-gray-600'}`}>
@@ -423,7 +421,7 @@ export default function AdminSchools() {
       {detailSchool && !editSchool && (
         <SchoolDetailModal
           school={detailSchool}
-          techName={techMap[detailSchool.techId] || '미배정'}
+          techName={detailSchool.techId || '미배정'}
           onEdit={() => setEditSchool(detailSchool)}
           onClose={() => setDetailSchool(null)}
         />

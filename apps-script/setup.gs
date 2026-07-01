@@ -21,6 +21,70 @@ function setupPushProperties() {
   });
 }
 
+// ============================================================
+//  1회성 정리: AS접수/방문기록에 남아있는 학교ID·기사ID 코드를 이름으로 치환
+//  (예전에 코드로 저장된 기존 데이터를 최신 방식인 학교명/담당기사 이름으로 정리)
+//  실행 방법: 함수 선택 드롭다운에서 "cleanupLegacyCodes" 선택 후 ▶ 실행
+//  ※ 실행 로그(보기 → 실행 로그)에서 어떤 셀이 바뀌었는지 확인 가능
+// ============================================================
+function cleanupLegacyCodes() {
+  var year = getCurrentMgmtYear();
+
+  var schoolRows = getSchoolSheet(year).getDataRange().getValues();
+  var schoolIdToName = {};
+  for (var i = 1; i < schoolRows.length; i++) {
+    var sid = String(schoolRows[i][0]).trim();
+    if (sid) schoolIdToName[sid] = String(schoolRows[i][5]).trim();
+  }
+
+  var techRows = getSheet('기사').getDataRange().getValues();
+  var techIdToName = {};
+  for (var j = 1; j < techRows.length; j++) {
+    var tid = String(techRows[j][0]).trim();
+    if (tid) techIdToName[tid] = String(techRows[j][1]).trim();
+  }
+
+  var changes = [];
+
+  var asSheet = getSheet('AS접수');
+  var asRows = asSheet.getDataRange().getValues();
+  if (asRows.length > 1) {
+    var asCols = colIndexMap(asRows[0]);
+    for (var a = 1; a < asRows.length; a++) {
+      var schoolCell = String(asRows[a][asCols['학교']] || '').trim();
+      if (schoolIdToName[schoolCell]) {
+        asSheet.getRange(a + 1, asCols['학교'] + 1).setValue(schoolIdToName[schoolCell]);
+        changes.push('AS접수 ' + asRows[a][asCols['ASID']] + ' 학교: ' + schoolCell + ' → ' + schoolIdToName[schoolCell]);
+      }
+    }
+  }
+
+  var visitSheet = getSheet('방문기록');
+  var visitRows = visitSheet.getDataRange().getValues();
+  if (visitRows.length > 1) {
+    var visitCols = colIndexMap(visitRows[0]);
+    for (var v = 1; v < visitRows.length; v++) {
+      if (visitCols['학교명'] != null) {
+        var vSchoolCell = String(visitRows[v][visitCols['학교명']] || '').trim();
+        if (schoolIdToName[vSchoolCell]) {
+          visitSheet.getRange(v + 1, visitCols['학교명'] + 1).setValue(schoolIdToName[vSchoolCell]);
+          changes.push('방문기록 ' + visitRows[v][visitCols['방문ID']] + ' 학교명: ' + vSchoolCell + ' → ' + schoolIdToName[vSchoolCell]);
+        }
+      }
+      if (visitCols['담당기사'] != null) {
+        var vTechCell = String(visitRows[v][visitCols['담당기사']] || '').trim();
+        if (techIdToName[vTechCell]) {
+          visitSheet.getRange(v + 1, visitCols['담당기사'] + 1).setValue(techIdToName[vTechCell]);
+          changes.push('방문기록 ' + visitRows[v][visitCols['방문ID']] + ' 담당기사: ' + vTechCell + ' → ' + techIdToName[vTechCell]);
+        }
+      }
+    }
+  }
+
+  Logger.log(changes.length ? changes.join('\n') : '변경할 데이터가 없습니다.');
+  return changes;
+}
+
 function setupAllSheets() {
   var ss = MY_SHEET_ID === 'YOUR_SHEET_ID_HERE'
     ? SpreadsheetApp.getActiveSpreadsheet()

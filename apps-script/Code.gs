@@ -299,7 +299,7 @@ function handleGetMySchools(data) {
     if (String(r[1]).trim() !== techName) continue;
     result.push({
       schoolId:            String(r[5]).trim(), // 학교ID가 비어있는 학교가 많아 학교명을 식별자로 사용
-      techId:              String(r[1]),
+      techId:              getTechNameById(r[1]), // 담당기사ID 칸에 이름이 들어있는 경우가 많아 이름으로 통일
       contact:             String(r[2]),
       contractor:          String(r[3] || ''),
       region:              String(r[4]),
@@ -694,7 +694,7 @@ function handleGetAllSchools(data) {
     var r = rows[i];
     result.push({
       schoolId:            String(r[5]).trim(), // 학교ID가 비어있는 학교가 많아 학교명을 식별자로 사용
-      techId:              String(r[1]),
+      techId:              getTechNameById(r[1]), // 담당기사ID 칸에 이름이 들어있는 경우가 많아 이름으로 통일
       contact:             String(r[2]),
       contractor:          String(r[3] || ''),
       region:              String(r[4]),

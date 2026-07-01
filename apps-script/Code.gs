@@ -298,7 +298,7 @@ function handleGetMySchools(data) {
     var r = rows[i];
     if (String(r[1]).trim() !== techName) continue;
     result.push({
-      schoolId:            String(r[0]).trim() || String(r[5]).trim(),
+      schoolId:            String(r[5]).trim(), // 학교ID가 비어있는 학교가 많아 학교명을 식별자로 사용
       techId:              String(r[1]),
       contact:             String(r[2]),
       contractor:          String(r[3] || ''),
@@ -693,7 +693,7 @@ function handleGetAllSchools(data) {
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
     result.push({
-      schoolId:            String(r[0]).trim() || String(r[5]).trim(),
+      schoolId:            String(r[5]).trim(), // 학교ID가 비어있는 학교가 많아 학교명을 식별자로 사용
       techId:              String(r[1]),
       contact:             String(r[2]),
       contractor:          String(r[3] || ''),

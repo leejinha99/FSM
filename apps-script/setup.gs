@@ -9,6 +9,18 @@
 // 시트 URL: https://docs.google.com/spreadsheets/d/【여기가 ID】/edit
 var MY_SHEET_ID = '1xIMF70ISC6rKMZ0kfpwnUV49IDNvYs2_IDYyaNHtMSo';
 
+// ============================================================
+//  웹푸시 알림용 스크립트 속성 설정
+//  실행 방법: 함수 선택 드롭다운에서 "setupPushProperties" 선택 후 ▶ 실행
+//  ※ 한 번만 실행하면 됩니다.
+// ============================================================
+function setupPushProperties() {
+  PropertiesService.getScriptProperties().setProperties({
+    PUSH_ENDPOINT: 'https://wellasu-fsm.vercel.app/api/send-push',
+    PUSH_API_SECRET: '1923e8d8df7458f34cc06f471eb27f4b8c760f092f273fd5',
+  });
+}
+
 function setupAllSheets() {
   var ss = MY_SHEET_ID === 'YOUR_SHEET_ID_HERE'
     ? SpreadsheetApp.getActiveSpreadsheet()

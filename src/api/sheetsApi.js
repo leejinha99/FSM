@@ -578,6 +578,14 @@ export const api = {
     return callApi('getSchoolHistory', { schoolId, schoolName })
   },
 
+  async savePushSubscription(techId, subscription) {
+    if (MOCK_MODE) {
+      await mockDelay(200)
+      return { success: true }
+    }
+    return callApi('savePushSubscription', { techId, subscription })
+  },
+
   async getStockMoves({ techId, warehouseId, year, month } = {}) {
     if (MOCK_MODE) {
       await mockDelay(300)

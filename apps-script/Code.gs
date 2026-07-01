@@ -36,6 +36,7 @@ function doPost(e) {
       case 'updateAS':      result = handleUpdateAS(data);      break;
       case 'getMyAS':       result = handleGetMyAS(data);       break;
       case 'createAS':      result = handleCreateAS(data);      break;
+      case 'savePushSubscription': result = handleSavePushSubscription(data); break;
       case 'updateVisit':    result = handleUpdateVisit(data);    break;
       case 'getWarehouses':  result = handleGetWarehouses(data);  break;
       case 'saveStockMove':  result = handleSaveStockMove(data);  break;
@@ -86,6 +87,7 @@ function doGet(e) {
         case 'updateAS':     result = handleUpdateAS(data);       break;
         case 'getMyAS':      result = handleGetMyAS(data);        break;
         case 'createAS':     result = handleCreateAS(data);       break;
+        case 'savePushSubscription': result = handleSavePushSubscription(data); break;
         case 'updateVisit':  result = handleUpdateVisit(data);    break;
         case 'getWarehouses':   result = handleGetWarehouses(data);   break;
         case 'saveStockMove':   result = handleSaveStockMove(data);   break;
@@ -944,6 +946,75 @@ function handleGetMyAS(data) {
   return result;
 }
 
+// ── 웹푸시 알림 ────────────────────────────────────────────
+// 스크립트 속성에 PUSH_ENDPOINT(Vercel /api/send-push 전체 URL), PUSH_API_SECRET 설정 필요
+// (프로젝트 설정 → 스크립트 속성)
+
+var PUSH_SUB_SHEET_NAME = 'PushSubscriptions';
+var PUSH_SUB_HEADERS = ['techId', 'endpoint', 'p256dh', 'auth', 'updatedDate'];
+
+function getPushSubscriptionsSheet() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sheet = ss.getSheetByName(PUSH_SUB_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(PUSH_SUB_SHEET_NAME);
+    sheet.appendRow(PUSH_SUB_HEADERS);
+  }
+  return sheet;
+}
+
+// 기사 구독정보 저장 (endpoint 기준 upsert — 기기 여러 대 등록 가능)
+function handleSavePushSubscription(data) {
+  var sheet = getPushSubscriptionsSheet();
+  var sub = data.subscription || {};
+  var keys = sub.keys || {};
+  var rows = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][1]) === sub.endpoint) {
+      sheet.getRange(i + 1, 1, 1, 5).setValues([[data.techId, sub.endpoint, keys.p256dh || '', keys.auth || '', formatDate(new Date())]]);
+      return { success: true };
+    }
+  }
+  sheet.appendRow([data.techId, sub.endpoint, keys.p256dh || '', keys.auth || '', formatDate(new Date())]);
+  return { success: true };
+}
+
+// techId로 등록된 모든 구독에 푸시 발송. 실패해도 절대 예외를 던지지 않음
+// (AS 저장 자체가 알림 발송 실패 때문에 막히면 안 됨)
+function sendPushToTech(techId, payload) {
+  try {
+    var key = String(techId || '').trim();
+    if (!key) return;
+    var props = PropertiesService.getScriptProperties();
+    var endpoint = props.getProperty('PUSH_ENDPOINT');
+    var secret = props.getProperty('PUSH_API_SECRET');
+    if (!endpoint || !secret) return; // 아직 설정 전이면 조용히 스킵
+
+    var subs = sheetToObjects(getPushSubscriptionsSheet());
+    subs.filter(function(r) { return String(r.techId).trim() === key; }).forEach(function(r) {
+      var body = {
+        subscription: { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
+        title: payload.title,
+        body: payload.body,
+        url: payload.url,
+      };
+      try {
+        UrlFetchApp.fetch(endpoint, {
+          method: 'post',
+          contentType: 'application/json',
+          headers: { 'x-api-secret': secret },
+          payload: JSON.stringify(body),
+          muteHttpExceptions: true,
+        });
+      } catch (e) {
+        // 개별 기기 발송 실패는 무시하고 다음 구독 계속 진행
+      }
+    });
+  } catch (e) {
+    // 알림 발송 관련 오류는 절대 상위로 전파하지 않음
+  }
+}
+
 // AS 신규 접수 (관리자)
 function handleCreateAS(data) {
   var lock = LockService.getScriptLock();
@@ -968,6 +1039,13 @@ function handleCreateAS(data) {
     set('설치위치', data.location || '');
     set('모델명',   data.model || '');
     sheet.appendRow(row);
+    if (data.assignedTechId) {
+      sendPushToTech(data.assignedTechId, {
+        title: '새 AS 배정',
+        body: (data.schoolNameManual || data.schoolName || data.schoolId || '') + ' - ' + (data.symptom || ''),
+        url: '/as',
+      });
+    }
     return { asId: asId };
   } finally {
     lock.releaseLock();
@@ -1023,9 +1101,14 @@ function handleUpdateAS(data) {
   for (var i = 1; i < rows.length; i++) {
     if (String(rows[i][c['ASID']]) === data.asId) {
       var rowNum = i + 1;
+      var prevTechName = c['담당기사'] != null ? String(rows[i][c['담당기사']] || '').trim() : '';
       var setCol = function(name, val) { if (c[name] != null) sheet.getRange(rowNum, c[name] + 1).setValue(val); };
       if (data.status)                                 setCol('상태', data.status);
-      if (typeof data.assignedTechId !== 'undefined')  setCol('담당기사', getTechNameById(data.assignedTechId));
+      var newTechName = '';
+      if (typeof data.assignedTechId !== 'undefined') {
+        newTechName = getTechNameById(data.assignedTechId);
+        setCol('담당기사', newTechName);
+      }
       if (typeof data.note !== 'undefined')            setCol('수리내역', data.note);
       if (typeof data.visitDate !== 'undefined')       setCol('방문일', data.visitDate);
       if (typeof data.symptom !== 'undefined')         setCol('AS내용', data.symptom);
@@ -1038,6 +1121,16 @@ function handleUpdateAS(data) {
       if (data.status === '수리완료' && c['완료일'] != null) {
         var doneCell = sheet.getRange(rowNum, c['완료일'] + 1);
         if (!String(doneCell.getValue()).trim()) doneCell.setValue(formatDate(new Date()));
+      }
+      // 담당기사가 신규 배정되거나 다른 기사로 바뀐 경우에만 알림 (동일 기사 재저장은 알림 X)
+      if (newTechName && newTechName !== prevTechName) {
+        var schoolName = c['학교'] != null ? String(rows[i][c['학교']] || '').trim() : '';
+        var symptom = typeof data.symptom !== 'undefined' ? data.symptom : (c['AS내용'] != null ? rows[i][c['AS내용']] : '');
+        sendPushToTech(data.assignedTechId, {
+          title: '새 AS 배정',
+          body: (data.schoolName || schoolName) + ' - ' + (symptom || ''),
+          url: '/as',
+        });
       }
       return { asId: data.asId };
     }

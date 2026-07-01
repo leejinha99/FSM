@@ -1,7 +1,38 @@
+import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNotification } from '../context/NotificationContext.jsx'
 import BottomNav from '../components/BottomNav.jsx'
+import { isPushSupported, usePushSubscription } from '../hooks/usePushSubscription.js'
+
+const PUSH_BANNER_DISMISSED_KEY = 'wellasu_push_banner_dismissed'
+
+function PushBanner({ techId }) {
+  const { status, subscribe } = usePushSubscription(techId)
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(PUSH_BANNER_DISMISSED_KEY) === '1')
+
+  if (dismissed || status === 'granted' || status === 'denied') return null
+  if (!isPushSupported() || typeof Notification === 'undefined' || Notification.permission !== 'default') return null
+
+  function dismiss() {
+    localStorage.setItem(PUSH_BANNER_DISMISSED_KEY, '1')
+    setDismissed(true)
+  }
+
+  return (
+    <div className="bg-blue-50 border-b border-blue-100 px-4 py-2.5 flex items-center gap-3 text-sm">
+      <span className="flex-1 text-blue-800">새 AS가 배정되면 알림을 받아보시겠어요?</span>
+      <button
+        onClick={subscribe}
+        disabled={status === 'requesting'}
+        className="shrink-0 bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full disabled:opacity-50"
+      >
+        {status === 'requesting' ? '요청 중...' : '알림 받기'}
+      </button>
+      <button onClick={dismiss} className="shrink-0 text-blue-400 text-xs">닫기</button>
+    </div>
+  )
+}
 
 const NAV_ITEMS = [
   {
@@ -112,6 +143,7 @@ export default function TechLayout() {
 
       {/* 콘텐츠 영역 */}
       <div className="flex-1 md:ml-[200px]">
+        <PushBanner techId={user?.techId} />
         <Outlet />
       </div>
 

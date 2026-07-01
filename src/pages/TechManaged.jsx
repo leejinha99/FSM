@@ -179,9 +179,17 @@ export default function TechManaged() {
 
   return (
     <div className="p-4 pb-24 md:pb-8">
-      <div className="mb-4">
-        <h2 className="text-base font-bold text-gray-800 mb-0.5">관리계정</h2>
-        <p className="text-xs text-gray-400">유지관리 학교 연간 방문 현황</p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-gray-800 mb-0.5">관리계정</h2>
+          <p className="text-xs text-gray-400">유지관리 학교 연간 방문 현황</p>
+        </div>
+        <button
+          onClick={() => navigate('/visit/bulk')}
+          className="shrink-0 px-3 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl hover:bg-blue-700 transition"
+        >
+          방문 일괄등록
+        </button>
       </div>
 
       {/* 학년도 필터 */}

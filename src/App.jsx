@@ -7,6 +7,7 @@ import TechStock from './pages/TechStock.jsx'
 import TechAS from './pages/TechAS.jsx'
 import VisitRegister from './pages/VisitRegister.jsx'
 import VisitEdit from './pages/VisitEdit.jsx'
+import VisitBulkRegister from './pages/VisitBulkRegister.jsx'
 import TechLayout from './pages/TechLayout.jsx'
 import AdminLayout from './pages/admin/AdminLayout.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
@@ -56,6 +57,7 @@ export default function App() {
             </Route>
             <Route path="/visit/new" element={<RequireAuth><VisitRegister /></RequireAuth>} />
             <Route path="/visit/edit/:visitId" element={<RequireAuth><VisitEdit /></RequireAuth>} />
+            <Route path="/visit/bulk" element={<RequireAuth><VisitBulkRegister /></RequireAuth>} />
 
             {/* 관리자 화면 */}
             <Route

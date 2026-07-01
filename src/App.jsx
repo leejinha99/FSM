@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { NotificationProvider } from './context/NotificationContext.jsx'
 import Login from './pages/Login.jsx'
@@ -24,7 +24,8 @@ import ReloadPrompt from './components/ReloadPrompt.jsx'
 
 function RequireAuth({ children, requiredRole }) {
   const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!user) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />
   if (requiredRole && user.role !== requiredRole && user.role !== '관리자') {
     return <Navigate to="/" replace />
   }

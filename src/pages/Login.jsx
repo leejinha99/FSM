@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { api, isMockMode, prefetchForUser } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from
 
   const [id, setId] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +28,9 @@ export default function Login() {
       const userData = await api.login(id.trim(), password)
       login(userData)
       prefetchForUser(userData)
-      if (userData.role === '관리자') {
+      if (from) {
+        navigate(from, { replace: true })
+      } else if (userData.role === '관리자') {
         navigate('/admin', { replace: true })
       } else {
         navigate('/calendar', { replace: true })

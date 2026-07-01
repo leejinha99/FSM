@@ -46,8 +46,8 @@ export default function VisitEdit() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!form.visitDate || !form.visitTime) {
-      setError('방문일과 방문시간은 필수입니다.')
+    if (!form.visitDate) {
+      setError('방문일은 필수입니다.')
       return
     }
     setSaving(true)

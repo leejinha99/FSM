@@ -582,7 +582,7 @@ export default function AdminTechSchedule() {
                   {visitModal.visits.map(v => (
                     <button
                       key={v.visitId}
-                      onClick={() => { setVisitModal(null); navigate(`/visit/edit/${v.visitId}`) }}
+                      onClick={() => { setVisitModal(null); navigate(`/visit/edit/${v.visitId}`, { state: { visit: v } }) }}
                       className="w-full text-left bg-gray-50 hover:bg-blue-50 rounded-xl px-4 py-3 transition"
                     >
                       <div className="flex justify-between items-center">

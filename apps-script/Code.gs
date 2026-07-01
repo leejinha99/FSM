@@ -1043,7 +1043,7 @@ function handleCreateAS(data) {
       sendPushToTech(data.assignedTechId, {
         title: '새 AS 배정',
         body: (data.schoolNameManual || data.schoolName || data.schoolId || '') + ' - ' + (data.symptom || ''),
-        url: '/as',
+        url: '/as?asId=' + asId,
       });
     }
     return { asId: asId };
@@ -1129,7 +1129,7 @@ function handleUpdateAS(data) {
         sendPushToTech(data.assignedTechId, {
           title: '새 AS 배정',
           body: (data.schoolName || schoolName) + ' - ' + (symptom || ''),
-          url: '/as',
+          url: '/as?asId=' + data.asId,
         });
       }
       return { asId: data.asId };

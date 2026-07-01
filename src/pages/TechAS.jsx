@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import dayjs from 'dayjs'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/sheetsApi.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useNotification } from '../context/NotificationContext.jsx'
@@ -857,6 +858,7 @@ function ASDetailModal({ ticket, onSave, onSaveNote, onClose, onPayment, onEstim
 export default function TechAS() {
   const { user } = useAuth()
   const { setAsUnread } = useNotification()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('전체')
@@ -885,6 +887,16 @@ export default function TechAS() {
   }
 
   useEffect(() => { load() }, [user.techId])
+
+  // 푸시 알림 탭으로 진입 시(?asId=...) 해당 AS 상세를 자동으로 연다
+  useEffect(() => {
+    const targetAsId = searchParams.get('asId')
+    if (!targetAsId || tickets.length === 0) return
+    const target = tickets.find(a => a.asId === targetAsId)
+    if (target) setSelected(target)
+    searchParams.delete('asId')
+    setSearchParams(searchParams, { replace: true })
+  }, [tickets, searchParams])
 
   function handleOpen(ticket) {
     setSelected(ticket)
